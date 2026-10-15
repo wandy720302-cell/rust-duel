@@ -37,6 +37,7 @@
         <button id="btnJoin" class="btn">加入</button>
       </div>
       <button id="btnSolo" class="btn ghost">單人練習：打稻草人</button>
+      <button id="btnGuide" class="btn ghost">遊戲說明</button>
 
       <div id="roomBox" hidden>
         <div class="roomLabel">房間碼</div>
@@ -119,6 +120,7 @@
       <label class="slider">視野 FOV <span id="fovVal"></span><input id="fov" type="range" min="65" max="100" step="1"></label>
       <label class="slider">音量 <span id="volVal"></span><input id="vol" type="range" min="0" max="1" step="0.05"></label>
       <button id="btnResume" class="btn primary">繼續</button>
+      <button id="btnGuide2" class="btn ghost">遊戲說明</button>
       <button id="btnLeave" class="btn ghost">離開回大廳</button>
     </div>
   </div>
@@ -145,6 +147,107 @@
 
   <div id="touch" hidden></div>
   <div id="rotate"><div class="phone"></div><b>把手機轉成橫的</b><small>直的拿根本沒地方放手指</small></div>
+
+  <!-- 遊戲說明 -->
+  <div id="guide" class="screen center" hidden>
+    <div class="guideBox" role="dialog" aria-labelledby="guideTitle">
+      <div class="guideHead">
+        <h2 id="guideTitle">遊戲說明</h2>
+        <button id="btnGuideClose" class="guideClose" aria-label="關閉">✕</button>
+      </div>
+      <div class="guideBody">
+        <section class="lead">
+          <p><b>RUST DUEL</b> 是致敬生存遊戲《Rust》的 1v1 網頁對決。</p>
+          <p>你和朋友各是一個只穿內褲的裸男，從自己的基地睡袋上醒來，手上有一把 AK 和一顆石頭。地圖上有水泥廢墟、貨櫃、樹林和海灘。<b>先擊殺對方 5 次的人獲勝。</b></p>
+        </section>
+
+        <section>
+          <h3>怎麼開始</h3>
+          <ol>
+            <li>一個人按「建立房間」，把 6 碼房間碼或「複製邀請連結」傳給朋友</li>
+            <li>朋友輸入房間碼按「加入」，或直接點邀請連結</li>
+            <li>連上就自動開打。想先熟悉手感，可以玩「單人練習」打稻草人 Bob</li>
+          </ol>
+          <p class="note">你的基地在地圖西邊（房主）或東邊（加入的人），中間是廢墟。</p>
+        </section>
+
+        <section>
+          <h3>電腦操作</h3>
+          <dl class="kv">
+            <dt>WASD</dt><dd>移動</dd>
+            <dt>滑鼠</dt><dd>轉視角（點一下畫面才會鎖定滑鼠）</dd>
+            <dt>左鍵</dt><dd>開火／揮石頭／放置木牆</dd>
+            <dt>右鍵</dt><dd>開鏡瞄準（只有 AK）</dd>
+            <dt>Shift</dt><dd>衝刺（衝刺時不能開槍）</dd>
+            <dt>Space</dt><dd>跳</dd>
+            <dt>C</dt><dd>蹲下（蹲著走沒有腳步聲）</dd>
+            <dt>R</dt><dd>換彈</dd>
+            <dt>1 / 3 / 4</dt><dd>切換 AK／石頭／木牆，滾輪也可以</dd>
+            <dt>2</dt><dd>打針筒回血</dd>
+            <dt>Esc</dt><dd>暫停、調靈敏度和音量</dd>
+          </dl>
+        </section>
+
+        <section>
+          <h3>手機操作（要橫著拿）</h3>
+          <dl class="kv">
+            <dt>左半邊</dt><dd>手指按下的位置就是搖桿，推到底往前是衝刺</dd>
+            <dt>右半邊</dt><dd>拖曳轉視角</dd>
+            <dt>右下按鈕</dt><dd>開火、瞄準、跳、蹲、換彈。開火鍵按住的同時拖曳可以壓槍</dd>
+            <dt>左上方</dt><dd>第二顆開火鍵，給左手用</dd>
+            <dt>快捷欄</dt><dd>點格子切換物品，點第 2 格打針筒</dd>
+            <dt>❚❚</dt><dd>暫停</dd>
+          </dl>
+          <p class="note">手機玩家有一點輔助瞄準：準心靠近對手時視角會變黏，開鏡或開火時會往對手身上吸。隔著牆不會吸。</p>
+        </section>
+
+        <section>
+          <h3>AK 突擊步槍</h3>
+          <ul>
+            <li>彈匣 30 發，全自動，換彈 3 秒</li>
+            <li>傷害：身體 30、<b>爆頭 60</b>、腿 22。滿血 100</li>
+            <li><b>後座力會一直往上飄，不會自己回來</b>，要自己往下拉，路線大概是先往左上、再甩右、再甩左</li>
+            <li>站著不動加開鏡最準；移動、跳躍、連續掃射都會變散</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>石頭、木頭、木牆</h3>
+          <ul>
+            <li>按 <kbd>3</kbd> 拿石頭敲樹，一下 <b>+25 木頭</b>。一棵樹有 200 木頭，敲完會倒</li>
+            <li>石頭也能敲人：身體 20、爆頭 32</li>
+            <li>按 <kbd>4</kbd> 拿藍圖，面前會出現牆的預覽：<span class="ok">綠色</span>可以蓋，<span class="bad">紅色</span>不行，下面會寫原因</li>
+            <li>一面木牆 <b>100 木頭</b>，每人最多 8 面，會跟著你的視角轉方向</li>
+            <li>木牆<b>擋得住子彈</b>，耐久 350：AK 要打 35 發、石頭要敲 14 下才會爛。準心對著牆可以看剩多少</li>
+            <li><b>死掉時身上的木頭會全部掉光</b>，蓋好的牆會留著</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>血量與重生</h3>
+          <ul>
+            <li>每條命有 2 支針筒：馬上 +15，之後 4 秒再慢慢回 20</li>
+            <li>右下的水和食物只是 rust 氣氛，不會渴死也不會餓死</li>
+            <li>死掉可以選重生點：<b>睡袋</b>（自己的基地，等 6 秒）或<b>海灘</b>（離對手最遠的那段，等 3 秒）</li>
+          </ul>
+        </section>
+
+        <section>
+          <h3>小技巧</h3>
+          <ul>
+            <li><b>戴耳機。</b>對手的腳步聲和槍聲都有方向，蹲著走就聽不到你</li>
+            <li>不要一直跳：落地會減速，連跳只會越跳越慢</li>
+            <li>廢墟裡有樓梯可以上頂樓，視野最好，女兒牆可以當掩體</li>
+            <li>單層貨櫃旁邊疊著木箱，跳上去就能站上貨櫃</li>
+            <li>廢墟西牆塌了半截，跳得過去，可以從側面偷襲</li>
+            <li>被壓著打的時候，先蓋一面牆擋住，再換回 AK 反擊</li>
+            <li>對手躲在牆後，有時候繞過去比打爛牆快</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <div id="wake"></div>
 
   <script type="module" src="js/main.js"></script>

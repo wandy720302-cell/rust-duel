@@ -195,6 +195,14 @@ bindSlider('vol', 'vol', (v) => `${Math.round(v * 100)}%`, () => audio.setVolume
 function showPause() { $('pause').hidden = false; }
 $('btnResume').addEventListener('click', () => resumeControl());
 $('btnLeave').addEventListener('click', leave);
+// 遊戲說明：大廳和暫停選單都打得開；點背景、按 ✕ 或 Esc 關掉
+function openGuide() { $('guide').hidden = false; $('guide').querySelector('.guideBody').scrollTop = 0; }
+function closeGuide() { $('guide').hidden = true; }
+$('btnGuide').addEventListener('click', openGuide);
+$('btnGuide2').addEventListener('click', openGuide);
+$('btnGuideClose').addEventListener('click', closeGuide);
+$('guide').addEventListener('click', (e) => { if (e.target.id === 'guide') closeGuide(); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('guide').hidden) closeGuide(); });
 $('btnEndLeave').addEventListener('click', leave);
 function leave() {
   net?.destroy();
