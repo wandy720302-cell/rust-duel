@@ -1,0 +1,115 @@
+// rust 風格 HUD：右下狀態條、底部快捷欄、頂部羅盤、右上擊殺通知
+const $ = (id) => document.getElementById(id);
+
+export const ICON = {
+  ak: `<svg viewBox="0 0 64 18" class="ico"><path d="M2 7.5 L13 5.6 L15.5 4.6 L41 4.6 L41 3.6 L57 3.6 L57 5.2 L62.5 5.2 L62.5 6.8 L41 6.8 L39 8.4 L34 8.4 L31.5 15.6 L27.2 16.4 L28.6 8.4 L22.5 8.4 L20.4 12.8 L17.2 12.6 L18.6 8.4 L14.5 8.6 L3.2 11.8 Z"/></svg>`,
+  syringe: `<svg viewBox="0 0 64 18" class="ico"><path d="M8 7 h4 v-3 h3 v3 h22 v4 h-22 v3 h-3 v-3 h-4 z M37 8 h8 v2 h-8 z M45 8.6 h14 v0.8 h-14 z"/></svg>`,
+  rock: `<svg viewBox="0 0 64 18" class="ico"><path d="M20 14 L18 9 L23 4 L33 3 L42 6 L45 11 L40 15 L28 16 Z"/></svg>`,
+  skull: `<svg viewBox="0 0 16 16" class="ico skull"><path d="M8 1 C3.5 1 2 4 2 7 c0 2 1 3 2 3.6 V13 h2 v-1.5 h1 V13 h2 v-1.5 h1 V13 h2 v-2.4 C13 10 14 9 14 7 14 4 12.5 1 8 1z M5.5 6 a1.4 1.4 0 1 1 0 2.8 a1.4 1.4 0 1 1 0-2.8z M10.5 6 a1.4 1.4 0 1 1 0 2.8 a1.4 1.4 0 1 1 0-2.8z"/></svg>`,
+};
+
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+export function initHud() {
+  // 羅盤：-180~540 度鋪一條長帶，靠位移顯示目前朝向
+  const strip = $('compassStrip');
+  const names = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
+  let html = '';
+  for (let d = -180; d <= 540; d += 15) {
+    const n = ((d % 360) + 360) % 360;
+    const label = names[n];
+    html += `<span class="tick ${label ? 'major' : ''}" style="left:${(d + 180) * 4}px">${label || (d % 45 === 0 ? '' : n)}</span>`;
+  }
+  strip.innerHTML = html;
+
+  const slots = [
+    { icon: ICON.ak, id: 'slotAk', key: 1 },
+    { icon: ICON.syringe, id: 'slotSyr', key: 2 },
+    { icon: ICON.rock, id: 'slotRock', key: 3, title: '石頭（精神象徵，不能用）' },
+    {}, {}, {},
+  ];
+  $('hotbar').innerHTML = slots.map((s, i) => `
+    <div class="slot ${i === 0 ? 'active' : ''}" ${s.id ? `id="${s.id}"` : ''} ${s.title ? `title="${s.title}"` : ''}>
+      <span class="key">${i + 1}</span>${s.icon || ''}<span class="qty"></span>
+    </div>`).join('');
+}
+
+let lastHp = -1, lastAmmo = '', lastHeading = -999;
+export const hud = {
+  show(v) { $('hud').hidden = !v; },
+  health(hp) {
+    const v = Math.max(0, Math.ceil(hp));
+    if (v === lastHp) return;
+    lastHp = v;
+    $('hpBar').style.width = v + '%';
+    $('hpVal').textContent = v;
+    $('hpRow').classList.toggle('low', v <= 30);
+  },
+  survival(water, food) {
+    $('waterBar').style.width = Math.min(100, water) + '%'; $('waterVal').textContent = Math.round(water);
+    $('foodBar').style.width = Math.min(100, food / 5) + '%'; $('foodVal').textContent = Math.round(food);
+  },
+  ammo(n, max, reloading) {
+    const s = `${n}|${reloading}`;
+    if (s === lastAmmo) return;
+    lastAmmo = s;
+    $('ammoNow').textContent = n;
+    $('ammoMax').textContent = `/ ${max}`;
+    $('ammoBox').classList.toggle('empty', n === 0);
+    document.querySelector('#slotAk .qty').textContent = n;
+  },
+  syringes(n) { document.querySelector('#slotSyr .qty').textContent = n ? `×${n}` : ''; $('slotSyr').classList.toggle('used', !n); },
+  score(me, opp, meName, oppName, target) {
+    $('score').innerHTML = target
+      ? `<span class="me">${esc(meName)}</span><b>${me}</b><i>:</i><b>${opp}</b><span class="op">${esc(oppName)}</span><em>先 ${target} 殺獲勝</em>`
+      : `<span class="me">${esc(meName)}</span><b>${me}</b><em>練習模式：稻草人擊殺數</em>`;
+  },
+  compass(yaw) {
+    const heading = ((-yaw * 180 / Math.PI) % 360 + 360) % 360;
+    if (Math.abs(heading - lastHeading) < 0.05) return;
+    lastHeading = heading;
+    $('compassStrip').style.transform = `translateX(${180 - (heading + 180) * 4}px)`;
+    $('heading').textContent = Math.round(heading) % 360;
+  },
+  killfeed(killer, victim, { head = false, mine = false } = {}) {
+    const el = document.createElement('div');
+    el.className = 'kf' + (mine ? ' mine' : '');
+    el.innerHTML = `<b>${esc(killer)}</b>${ICON.ak}${head ? ICON.skull : ''}<b class="v">${esc(victim)}</b>`;
+    $('killfeed').prepend(el);
+    setTimeout(() => el.classList.add('out'), 6000);
+    setTimeout(() => el.remove(), 6600);
+    while ($('killfeed').children.length > 5) $('killfeed').lastChild.remove();
+  },
+  hitmarker(head) {
+    const h = $('hitmarker');
+    h.className = ''; void h.offsetWidth;
+    h.className = head ? 'show head' : 'show';
+  },
+  hurt(deg) {
+    const v = $('hurt');
+    v.classList.remove('show'); void v.offsetWidth; v.classList.add('show');
+    const d = document.createElement('div');
+    d.className = 'dmgArc';
+    d.style.transform = `translate(-50%,-50%) rotate(${deg}deg)`;
+    $('dmgdir').appendChild(d);
+    setTimeout(() => d.remove(), 1200);
+  },
+  action(text, progress) {
+    const a = $('action');
+    if (!text) { a.hidden = true; return; }
+    a.hidden = false;
+    $('actionText').textContent = text;
+    $('actionBar').style.width = Math.round(progress * 100) + '%';
+  },
+  crosshair(spreadPx, ads) {
+    $('cross').style.setProperty('--gap', spreadPx + 'px');
+    $('cross').classList.toggle('ads', ads > 0.6);
+  },
+  toast(text, ms = 2500) {
+    const t = $('toast');
+    t.textContent = text; t.classList.add('show');
+    clearTimeout(t._tm);
+    t._tm = setTimeout(() => t.classList.remove('show'), ms);
+  },
+  ping(ms) { $('ping').textContent = ms == null ? '' : `${Math.round(ms)} ms`; },
+};

@@ -1,0 +1,11 @@
+{
+  "name": "rust-duel",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "rust 風格 1v1 AK 對決，three.js + WebRTC P2P，純靜態可直接放 GitHub Pages",
+  "scripts": {
+    "start": "npx --yes serve -l 8080 .",
+    "check": "for f in js/*.js; do node --check $f || exit 1; done && echo syntax-ok"
+  }
+}

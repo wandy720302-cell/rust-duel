@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RUST DUEL</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%23cd412b%22/%3E%3Ctext x=%228%22 y=%2212.5%22 font-size=%2212%22 font-family=%22Arial%22 font-weight=%22900%22 text-anchor=%22middle%22 fill=%22%23fff%22%3ER%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700;900&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="grade"></div>
+
+  <!-- 大廳 -->
+  <div id="lobby" class="screen">
+    <div class="menu">
+      <div class="logo">RUST<span>DUEL</span></div>
+      <div class="tag">1v1 · 突擊步槍 · 先拿 5 殺的贏</div>
+
+      <label class="field">你的名字
+        <input id="nameInput" maxlength="14" autocomplete="off" spellcheck="false">
+      </label>
+
+      <button id="btnHost" class="btn primary">建立房間</button>
+      <div class="joinRow">
+        <input id="codeInput" placeholder="房間碼" maxlength="6" autocomplete="off" spellcheck="false">
+        <button id="btnJoin" class="btn">加入</button>
+      </div>
+      <button id="btnSolo" class="btn ghost">單人練習：打稻草人</button>
+
+      <div id="roomBox" hidden>
+        <div class="roomLabel">房間碼</div>
+        <div id="roomCode">------</div>
+        <button id="btnCopy" class="btn small">複製邀請連結</button>
+        <div class="waiting"><i></i>等朋友進來…</div>
+      </div>
+      <div id="lobbyStatus"></div>
+    </div>
+
+    <div class="keys">
+      <h3>操作</h3>
+      <dl>
+        <dt>WASD</dt><dd>移動</dd>
+        <dt>Shift</dt><dd>衝刺（衝刺時不能開槍）</dd>
+        <dt>Space</dt><dd>跳（翻得過半截牆、爬得上疊箱）</dd>
+        <dt>C</dt><dd>蹲下（蹲著走沒有腳步聲）</dd>
+        <dt>左鍵</dt><dd>開火（全自動，會往上飄，自己壓槍）</dd>
+        <dt>右鍵</dt><dd>瞄準</dd>
+        <dt>R</dt><dd>換彈</dd>
+        <dt>2</dt><dd>打針筒回血（每條命 2 支）</dd>
+        <dt>Esc</dt><dd>暫停 / 設定</dd>
+      </dl>
+      <p class="tip">戴耳機玩。對手的腳步聲跟槍聲都有方向。</p>
+    </div>
+    <div class="foot">非官方致敬作品 · 需要鍵盤滑鼠 · 建議 Chrome / Edge</div>
+  </div>
+
+  <!-- 遊戲 HUD -->
+  <div id="hud" hidden>
+    <div id="compass">
+      <div id="compassStrip"></div>
+      <div class="needle"></div>
+      <div id="heading">0</div>
+    </div>
+    <div id="score"></div>
+    <div id="killfeed"></div>
+    <div id="ping"></div>
+
+    <div id="cross"><i class="dot"></i><i class="l"></i><i class="r"></i><i class="t"></i><i class="b"></i></div>
+    <div id="hitmarker"></div>
+    <div id="dmgdir"></div>
+    <div id="hurt"></div>
+
+    <div id="action" hidden>
+      <div id="actionText"></div>
+      <div class="bar"><div id="actionBar"></div></div>
+    </div>
+
+    <div id="hotbar"></div>
+
+    <div id="status">
+      <div id="ammoBox"><span id="ammoNow">30</span><span id="ammoMax">/ 30</span><small>5.56 步槍彈</small></div>
+      <div class="row" id="hpRow">
+        <span class="ic">✚</span><div class="bar"><div id="hpBar" class="fill hp"></div></div><span id="hpVal" class="val">100</span>
+      </div>
+      <div class="row">
+        <span class="ic"><svg viewBox="0 0 16 16"><path d="M8 1.5 C8 1.5 3 7.5 3 10.5 a5 5 0 0 0 10 0 C13 7.5 8 1.5 8 1.5z"/></svg></span><div class="bar"><div id="waterBar" class="fill water"></div></div><span id="waterVal" class="val">0</span>
+      </div>
+      <div class="row">
+        <span class="ic"><svg viewBox="0 0 16 16"><path d="M3 2 v5 a2 2 0 0 0 1.5 1.9 V14.5 h1.5 V8.9 A2 2 0 0 0 7.5 7 V2 h-1 v4 h-1 V2 h-1 v4 h-1 V2z M10.5 2 c-1.5 1-2 3-2 5 h1.5 v7.5 h1.5 V2z"/></svg></span><div class="bar"><div id="foodBar" class="fill food"></div></div><span id="foodVal" class="val">0</span>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+  </div>
+
+  <div id="clickToPlay" class="screen center" hidden>
+    <div class="panel"><b>點一下畫面開始</b><small>Esc 可以暫停</small></div>
+  </div>
+
+  <div id="pause" class="screen center" hidden>
+    <div class="panel wide">
+      <h2>暫停</h2>
+      <label class="slider">滑鼠靈敏度 <span id="sensVal"></span><input id="sens" type="range" min="0.2" max="3" step="0.05"></label>
+      <label class="slider">視野 FOV <span id="fovVal"></span><input id="fov" type="range" min="65" max="100" step="1"></label>
+      <label class="slider">音量 <span id="volVal"></span><input id="vol" type="range" min="0" max="1" step="0.05"></label>
+      <button id="btnResume" class="btn primary">繼續</button>
+      <button id="btnLeave" class="btn ghost">離開回大廳</button>
+    </div>
+  </div>
+
+  <div id="death" class="screen" hidden>
+    <div class="deadTitle">YOU'RE DEAD</div>
+    <div class="deadSub">你死了</div>
+    <div id="killerCard"></div>
+    <div class="respawns">
+      <button id="btnBag" class="spawnCard"><b>睡袋</b><span>你的基地</span><em id="bagCd"></em></button>
+      <button id="btnBeach" class="spawnCard"><b>海灘</b><span>隨機重生，離對手最遠的那邊</span><em id="beachCd"></em></button>
+    </div>
+  </div>
+
+  <div id="matchEnd" class="screen center" hidden>
+    <div class="panel wide">
+      <div id="endTitle"></div>
+      <div id="endScore"></div>
+      <button id="btnRematch" class="btn primary">再來一局</button>
+      <div id="rematchStatus"></div>
+      <button id="btnEndLeave" class="btn ghost">回大廳</button>
+    </div>
+  </div>
+
+  <div id="wake"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
