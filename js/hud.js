@@ -5,6 +5,8 @@ export const ICON = {
   ak: `<svg viewBox="0 0 64 18" class="ico"><path d="M2 7.5 L13 5.6 L15.5 4.6 L41 4.6 L41 3.6 L57 3.6 L57 5.2 L62.5 5.2 L62.5 6.8 L41 6.8 L39 8.4 L34 8.4 L31.5 15.6 L27.2 16.4 L28.6 8.4 L22.5 8.4 L20.4 12.8 L17.2 12.6 L18.6 8.4 L14.5 8.6 L3.2 11.8 Z"/></svg>`,
   syringe: `<svg viewBox="0 0 64 18" class="ico"><path d="M8 7 h4 v-3 h3 v3 h22 v4 h-22 v3 h-3 v-3 h-4 z M37 8 h8 v2 h-8 z M45 8.6 h14 v0.8 h-14 z"/></svg>`,
   rock: `<svg viewBox="0 0 64 18" class="ico"><path d="M20 14 L18 9 L23 4 L33 3 L42 6 L45 11 L40 15 L28 16 Z"/></svg>`,
+  wall: `<svg viewBox="0 0 64 18" class="ico"><path d="M18 2 h28 v15 h-28 z M20.5 4 v11 h3 v-11 z M26 4 v11 h3 v-11 z M31.5 4 v11 h3 v-11 z M37 4 v11 h3 v-11 z M42 4 v11 h2 v-11 z" fill-rule="evenodd"/></svg>`,
+  wood: `<svg viewBox="0 0 64 18" class="ico"><path d="M14 6 h30 a3.5 3.5 0 0 1 0 7 h-30 a3.5 3.5 0 0 1 0 -7z M20 8 h30 a3.5 3.5 0 0 1 0 7 h-30z" opacity=".9"/><circle cx="44" cy="9.5" r="2.2" fill="#2a2620"/></svg>`,
   skull: `<svg viewBox="0 0 16 16" class="ico skull"><path d="M8 1 C3.5 1 2 4 2 7 c0 2 1 3 2 3.6 V13 h2 v-1.5 h1 V13 h2 v-1.5 h1 V13 h2 v-2.4 C13 10 14 9 14 7 14 4 12.5 1 8 1z M5.5 6 a1.4 1.4 0 1 1 0 2.8 a1.4 1.4 0 1 1 0-2.8z M10.5 6 a1.4 1.4 0 1 1 0 2.8 a1.4 1.4 0 1 1 0-2.8z"/></svg>`,
 };
 
@@ -25,8 +27,10 @@ export function initHud() {
   const slots = [
     { icon: ICON.ak, id: 'slotAk', key: 1 },
     { icon: ICON.syringe, id: 'slotSyr', key: 2 },
-    { icon: ICON.rock, id: 'slotRock', key: 3, title: '石頭（精神象徵，不能用）' },
-    {}, {}, {},
+    { icon: ICON.rock, id: 'slotRock', key: 3, title: '石頭：敲樹拿木頭，也能敲人' },
+    { icon: ICON.wall, id: 'slotWall', key: 4, title: '木牆：100 木頭' },
+    { icon: ICON.wood, id: 'slotWood', key: 5, title: '木頭' },
+    {},
   ];
   $('hotbar').innerHTML = slots.map((s, i) => `
     <div class="slot ${i === 0 ? 'active' : ''}" ${s.id ? `id="${s.id}"` : ''} ${s.title ? `title="${s.title}"` : ''}>
@@ -71,10 +75,10 @@ export const hud = {
     $('compassStrip').style.transform = `translateX(${180 - (heading + 180) * 4}px)`;
     $('heading').textContent = Math.round(heading) % 360;
   },
-  killfeed(killer, victim, { head = false, mine = false } = {}) {
+  killfeed(killer, victim, { head = false, mine = false, weapon = 'ak' } = {}) {
     const el = document.createElement('div');
     el.className = 'kf' + (mine ? ' mine' : '');
-    el.innerHTML = `<b>${esc(killer)}</b>${ICON.ak}${head ? ICON.skull : ''}<b class="v">${esc(victim)}</b>`;
+    el.innerHTML = `<b>${esc(killer)}</b>${ICON[weapon] || ICON.ak}${head ? ICON.skull : ''}<b class="v">${esc(victim)}</b>`;
     $('killfeed').prepend(el);
     setTimeout(() => el.classList.add('out'), 6000);
     setTimeout(() => el.remove(), 6600);
@@ -104,6 +108,39 @@ export const hud = {
   crosshair(spreadPx, ads) {
     $('cross').style.setProperty('--gap', spreadPx + 'px');
     $('cross').classList.toggle('ads', ads > 0.6);
+  },
+  // 快捷欄：0=AK 2=石頭 3=木牆
+  activeSlot(i) {
+    document.querySelectorAll('#hotbar .slot').forEach((el, k) => el.classList.toggle('active', k === i));
+  },
+  wood(n, cost) {
+    document.querySelector('#slotWood .qty').textContent = n;
+    document.querySelector('#slotWall .qty').textContent = cost;
+    $('slotWall').classList.toggle('used', n < cost);
+    $('slotWood').classList.toggle('used', n <= 0);
+  },
+  look(text) {
+    const el = $('lookInfo');
+    if (el.textContent !== (text || '')) el.textContent = text || '';
+    el.hidden = !text;
+  },
+  hint(text, ok) {
+    const el = $('buildHint');
+    if (!text) { el.hidden = true; return; }
+    el.hidden = false;
+    if (el.textContent !== text) el.textContent = text;
+    el.classList.toggle('bad', !ok);
+  },
+  // 右下角的撿取通知（rust 的 +25 Wood）
+  pickup(text) {
+    const box = $('pickups');
+    const el = document.createElement('div');
+    el.className = 'pick';
+    el.textContent = text;
+    box.appendChild(el);
+    setTimeout(() => el.classList.add('out'), 1600);
+    setTimeout(() => el.remove(), 2100);
+    while (box.children.length > 4) box.firstChild.remove();
   },
   toast(text, ms = 2500) {
     const t = $('toast');

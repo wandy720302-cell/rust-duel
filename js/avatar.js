@@ -1,6 +1,6 @@
 // 對手的身體：rust 經典「只穿一條內褲拿 AK 的裸男」
 import * as THREE from 'three';
-import { buildAK } from './weapon.js';
+import { buildAK, buildRock, buildPlan, ROCK } from './weapon.js';
 
 export const SKINS = [
   { skin: '#d2a67f', shorts: '#2a3f6b', hair: '#3b2a1c' },
@@ -49,6 +49,18 @@ export function createAvatar(scene, look, T) {
   const { group: ak, muzzle } = buildAK();
   ak.position.set(0.1, -0.06, -0.38);
   aim.add(ak);
+  // 第三人稱手上的石頭 / 藍圖（跟 AK 三選一）
+  const rock = buildRock(0.1, T);
+  rock.position.set(0.22, -0.05, -0.42);
+  aim.add(rock);
+  const plan = buildPlan(T);
+  plan.scale.setScalar(1.4);
+  plan.position.set(0.1, -0.1, -0.42);
+  plan.rotation.x = -0.9;
+  aim.add(plan);
+  const items = { ak, rock, plan };
+  const showItem = (k) => { for (const [name, o] of Object.entries(items)) o.visible = name === k; };
+  showItem('ak');
   const armR = box(0.1, 0.1, 0.4, skin, aim, 0.2, -0.08, -0.16); armR.rotation.y = 0.18;
   const armL = box(0.1, 0.1, 0.55, skin, aim, -0.04, -0.09, -0.32); armL.rotation.y = -0.55;
 
@@ -61,7 +73,7 @@ export function createAvatar(scene, look, T) {
 
   scene.add(root);
 
-  const st = { phase: 0, dead: 0, flashT: 0, crouch: 0, alive: true, stepAcc: 0 };
+  const st = { phase: 0, dead: 0, flashT: 0, crouch: 0, alive: true, stepAcc: 0, item: 'ak', swing: -1 };
   const inv = new THREE.Matrix4();
   const lo = new THREE.Vector3(), ld = new THREE.Vector3();
 
@@ -88,6 +100,14 @@ export function createAvatar(scene, look, T) {
       root.rotation.y = s.yaw;
       st.crouch = s.crouch;
       aim.rotation.x = s.pitch;
+      if (s.item && s.item !== st.item) { st.item = s.item; showItem(s.item); }
+      // 揮石頭：手臂整組往上抬再往下砸
+      if (st.swing >= 0) {
+        st.swing += dt / ROCK.swing;
+        const q = st.swing;
+        aim.rotation.x += q < 0.3 ? 0.9 * (q / 0.3) : q < 0.45 ? 0.9 - 2.0 * ((q - 0.3) / 0.15) : -1.1 * (1 - (q - 0.45) / 0.55);
+        if (q >= 1) st.swing = -1;
+      }
       head.rotation.x = s.pitch * 0.6;
       const c = s.crouch;
       upper.position.y = 0.88 - 0.45 * c;
@@ -105,6 +125,7 @@ export function createAvatar(scene, look, T) {
       body.position.y = e * 0.15;
       if (st.flashT > 0) { st.flashT -= dt; if (st.flashT <= 0) flash.visible = false; }
     },
+    swing() { st.swing = 0; },
     flash() {
       st.flashT = 0.05; flash.visible = true;
       flash.material.rotation = Math.random() * 6.28;

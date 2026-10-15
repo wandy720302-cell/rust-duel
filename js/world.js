@@ -111,16 +111,17 @@ export function buildWorld(scene, opts = {}) {
     bag: std({ color: '#5a6438' }),
     bagHead: std({ color: '#8a7f5c' }),
     glow: new THREE.MeshBasicMaterial({ color: '#ff8a2a' }),
-    tcRed: new THREE.MeshBasicMaterial({ color: '#d33b1f' }),
+    tc: std({ map: T.tc }),
     barrelBlue: std({ color: '#2d4f78', roughness: 0.6, metalness: 0.4, map: T.sheet }),
     barrelYellow: std({ color: '#c9a531', roughness: 0.6, metalness: 0.4, map: T.sheet }),
   };
 
   function addBox(min, max, mat, o = {}) {
-    const { collide = true, shoot = true, cast = true, size = 3, surf = 'wood' } = o;
+    // fit：貼圖整張貼滿每一面（小家具用）；不然照真實公尺數展開
+    const { collide = true, shoot = true, cast = true, size = 3, surf = 'wood', fit = false } = o;
     const w = max[0] - min[0], h = max[1] - min[1], d = max[2] - min[2];
     const geo = new THREE.BoxGeometry(w, h, d);
-    worldUV(geo, w, h, d, size);
+    if (!fit) worldUV(geo, w, h, d, size);
     const m = new THREE.Mesh(geo, mat);
     m.position.set((min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2);
     m.castShadow = cast; m.receiveShadow = true;
@@ -308,15 +309,14 @@ export function buildWorld(scene, opts = {}) {
     { const [x0, x1] = span(3.02, 4.2); addBox([x0, fy, cz - 0.68], [x1, fy + 2.28, cz - 0.6], doorM, { surf: surf === 'metal' ? 'metal' : 'wood', size: 2.3 }); }
 
     // 室內：TC、熔爐、大木箱、睡袋 —— rust 玩家的家具 starter pack
-    { const [x0, x1] = span(-2.85, -2.3); addBox([x0, fy, cz - 1.3], [x1, fy + 1.1, cz - 0.75], M.crate, { surf: 'wood', size: 1 });
-      const [s0, s1] = span(-2.31, -2.29);
-      addBox([s0, fy + 0.75, cz - 1.15], [s1, fy + 0.95, cz - 0.9], M.tcRed, { collide: false, shoot: false }); }
+    { const [x0, x1] = span(-2.85, -2.3); addBox([x0, fy, cz - 1.3], [x1, fy + 1.1, cz - 0.75], M.tc, { surf: 'wood', fit: true });
+      const [l0, l1] = span(-2.89, -2.26); addBox([l0, fy + 1.1, cz - 1.34], [l1, fy + 1.16, cz - 0.71], M.planks, { surf: 'wood', fit: true, collide: false }); }
     { const [x0, x1] = span(-2.85, -2.05); addBox([x0, fy, cz + 0.45], [x1, fy + 1.05, cz + 1.25], M.stone, { surf: 'stone', size: 1.2 });
       const [g0, g1] = span(-2.06, -2.03);
       addBox([g0, fy + 0.2, cz + 0.65], [g1, fy + 0.55, cz + 1.05], M.glow, { collide: false, shoot: false, cast: false });
       const [c0, c1] = span(-2.6, -2.3);
       addBox([c0, fy + 1.05, cz + 0.7], [c1, fy + 2.99, cz + 1.0], M.darkMetal, { collide: false, surf: 'metal' }); }
-    { const [x0, x1] = span(-0.4, 0.9); addBox([x0, fy, cz - 1.3], [x1, fy + 0.75, cz - 0.7], M.crate, { surf: 'wood', size: 0.75 }); }
+    { const [x0, x1] = span(-0.4, 0.9); addBox([x0, fy, cz - 1.3], [x1, fy + 0.75, cz - 0.7], M.crate, { surf: 'wood', fit: true }); }
     { const [x0, x1] = span(-2.0, -0.2); addBox([x0, fy, cz + 0.25], [x1, fy + 0.1, cz + 1.05], M.bag, { collide: false, shoot: false, cast: false });
       const [h0, h1] = span(-2.0, -1.6); addBox([h0, fy + 0.1, cz + 0.3], [h1, fy + 0.18, cz + 1.0], M.bagHead, { collide: false, shoot: false, cast: false }); }
     // 微弱的爐火光
@@ -367,10 +367,10 @@ export function buildWorld(scene, opts = {}) {
     addBox([3.4, fy, 0.6], [4.3, fy + 0.9, 1.5], M.crate, { surf: 'wood', size: 0.9 });
     addBox([4.3, fy, 0.6], [5.2, fy + 0.9, 1.5], M.crate, { surf: 'wood', size: 0.9 });
     addBox([3.85, fy + 0.9, 0.6], [4.75, fy + 1.8, 1.5], M.crate, { surf: 'wood', size: 0.9 });
-    addBox([4.4, fy, -5.5], [5.5, fy + 0.6, -4.8], M.military, { surf: 'metal', size: 0.8 });
-    addBox([-5.2, fy, 0.3], [-4.2, fy + 0.6, 1.2], M.military, { surf: 'metal', size: 0.8 });
+    addBox([4.4, fy, -5.5], [5.5, fy + 0.6, -4.8], M.military, { surf: 'metal', fit: true });
+    addBox([-5.2, fy, 0.3], [-4.2, fy + 0.6, 1.2], M.military, { surf: 'metal', fit: true });
     // 屋頂上的軍用箱，給爬上去的人一點掩護
-    addBox([2.2, pt, -1.2], [3.2, pt + 0.6, -0.4], M.military, { surf: 'metal', size: 0.8 });
+    addBox([2.2, pt, -1.2], [3.2, pt + 0.6, -0.4], M.military, { surf: 'metal', fit: true });
     blockers.push({ x: 0, z: -2, r: 10 });
   }
 
@@ -484,7 +484,9 @@ export function buildWorld(scene, opts = {}) {
   const NODES = [[-18, -22, 'stone'], [-29, -1, 'metal'], [-12, 15, 'sulfur'], [-45, -3, 'metal'], [-33, -28, 'sulfur']];
   NODES.forEach(([x, z, k], i) => { node(x, z, k, 100 + i); node(-x, z, k, 100 + i); });
 
-  // ---------- 樹（instanced，一次畫一堆） ----------
+  // ---------- 樹（instanced，一次畫一堆；拿石頭敲可以拿木頭，敲完會倒） ----------
+  const TREE_WOOD = 200;
+  const trees = { p: [], b: [] };
   function blocked(x, z, pad = 0) {
     if (distRoad(x, z) < 3.2 + pad) return true;
     for (const b of blockers) if (Math.hypot(x - b.x, z - b.z) < b.r + pad) return true;
@@ -512,6 +514,11 @@ export function buildWorld(scene, opts = {}) {
     const pineTrunks = new THREE.InstancedMesh(trunkGeo, M.bark, pines.length);
     const pineCones = new THREE.InstancedMesh(coneGeo, M.pine, pines.length * 4);
     const pc = new THREE.Color();
+    // 每棵樹記下它在各個 InstancedMesh 裡的位置，砍倒時把那幾格縮成 0
+    const reg = (kind, i, t, g, parts) => {
+      trees[kind][i] = { kind, i, x: t.x, z: t.z, wood: TREE_WOOD, alive: true, col: colliders[colliders.length - 1],
+        parts, fall: 0, dir: [1, 0], base: new THREE.Vector3(t.x, g, t.z) };
+    };
     pines.forEach((t, i) => {
       const g = heightAt(t.x, t.z), h = 8 * t.s, r = 0.28 * t.s;
       q.setFromAxisAngle(up, t.rot);
@@ -523,6 +530,7 @@ export function buildWorld(scene, opts = {}) {
         pineCones.setColorAt(i * 4 + k, pc.setHSL(0.26 + (R() - 0.5) * 0.04, 0.3, 0.2 + k * 0.025 + R() * 0.04, THREE.SRGBColorSpace));
       }
       cyl(t.x, t.z, r + 0.05, g - 1, g + h);
+      reg('p', i, t, g, [[pineTrunks, i], ...[0, 1, 2, 3].map((k) => [pineCones, i * 4 + k])]);
     });
     const birchTrunks = new THREE.InstancedMesh(trunkGeo, M.birch, birches.length);
     const birchLeaves = new THREE.InstancedMesh(blobGeo, M.leaf, birches.length * 5);
@@ -539,6 +547,7 @@ export function buildWorld(scene, opts = {}) {
         birchLeaves.setColorAt(i * 5 + k, pc.setHSL(0.22 + (R() - 0.5) * 0.06, 0.3, 0.26 + R() * 0.06, THREE.SRGBColorSpace));
       }
       cyl(t.x, t.z, r + 0.05, g - 1, g + h);
+      reg('b', i, t, g, [[birchTrunks, i], ...[0, 1, 2, 3, 4].map((k) => [birchLeaves, i * 5 + k])]);
     });
     for (const im of [pineTrunks, pineCones, birchTrunks, birchLeaves]) {
       im.castShadow = true; im.receiveShadow = true;
@@ -548,7 +557,12 @@ export function buildWorld(scene, opts = {}) {
       scene.add(im);
     }
     pineTrunks.userData.surf = birchTrunks.userData.surf = 'wood';
+    pineTrunks.userData.treeKind = 'p'; birchTrunks.userData.treeKind = 'b';
     solids.push(pineTrunks, birchTrunks);
+    // 記住原始矩陣，倒下動畫跟重置都從這裡算
+    for (const kind of ['p', 'b']) for (const t of trees[kind]) {
+      t.parts = t.parts.map(([im, idx]) => { const m = new THREE.Matrix4(); im.getMatrixAt(idx, m); return [im, idx, m]; });
+    }
   }
 
   // 灌木叢
@@ -679,6 +693,74 @@ export function buildWorld(scene, opts = {}) {
     spawns.beach.push({ pos: new THREE.Vector3(x, heightAt(x, z), z), yaw: 0 });
   }
 
+  // ---------- 樹木 API ----------
+  // 砍掉的樹：縮到很小丟到地底（縮成 0 會讓矩陣不可逆，射線檢測會算出怪東西）
+  const ZERO = new THREE.Matrix4().compose(new THREE.Vector3(0, -9999, 0), new THREE.Quaternion(), new THREE.Vector3(1e-3, 1e-3, 1e-3));
+  const fm = new THREE.Matrix4(), fr = new THREE.Matrix4(), ft = new THREE.Matrix4(), fti = new THREE.Matrix4();
+  const fAxis = new THREE.Vector3();
+  const falling = new Set();
+  function setTreeMatrices(t, angle) {
+    const touched = new Set();
+    for (const [im, idx, m] of t.parts) {
+      if (angle === null) im.setMatrixAt(idx, ZERO);
+      else if (angle === 0) im.setMatrixAt(idx, m);
+      else {
+        // 以樹根為支點往 dir 方向倒
+        ft.makeTranslation(t.base.x, t.base.y, t.base.z);
+        fti.makeTranslation(-t.base.x, -t.base.y, -t.base.z);
+        fr.makeRotationAxis(fAxis.set(t.dir[1], 0, -t.dir[0]), angle);
+        fm.copy(ft).multiply(fr).multiply(fti).multiply(m);
+        im.setMatrixAt(idx, fm);
+      }
+      touched.add(im);
+    }
+    for (const im of touched) im.instanceMatrix.needsUpdate = true;
+  }
+  function fellTree(t, dx = 1, dz = 0) {
+    if (!t.alive) return;
+    t.alive = false; t.wood = 0;
+    const d = Math.hypot(dx, dz) || 1;
+    t.dir = [dx / d, dz / d];
+    t.fall = 0;
+    const k = colliders.indexOf(t.col);
+    if (k >= 0) colliders.splice(k, 1);
+    falling.add(t);
+  }
+  updaters.push((time, dt) => {
+    for (const t of falling) {
+      t.fall += dt;
+      const a = Math.min(1, t.fall / 1.6);
+      if (t.fall > 3.2) { setTreeMatrices(t, null); falling.delete(t); }
+      else setTreeMatrices(t, a * a * Math.PI / 2 * 0.97);
+    }
+  });
+  const treeApi = {
+    MAX: TREE_WOOD,
+    fromHit(hit) {
+      const kind = hit?.mesh?.userData.treeKind;
+      if (!kind || hit.instanceId === undefined) return null;
+      const t = trees[kind][hit.instanceId];
+      return t && t.alive ? t : null;
+    },
+    get(kind, i) { return trees[kind]?.[i] || null; },
+    // 敲一下：回傳實際拿到多少木頭（樹剩不夠就只給剩的）
+    chop(t, amt) {
+      if (!t.alive) return 0;
+      const got = Math.min(amt, t.wood);
+      t.wood -= got;
+      return got;
+    },
+    fell: fellTree,
+    reset() {
+      falling.clear();
+      for (const kind of ['p', 'b']) for (const t of trees[kind]) {
+        t.wood = TREE_WOOD;
+        if (!t.alive) { t.alive = true; colliders.push(t.col); }
+        setTreeMatrices(t, 0);
+      }
+    },
+  };
+
   // ---------- 子彈射線 ----------
   const rc = new THREE.Raycaster();
   function rayTerrain(o, d, max) {
@@ -706,7 +788,7 @@ export function buildWorld(scene, opts = {}) {
       const normal = (h.face && h.instanceId === undefined)
         ? h.face.normal.clone().transformDirection(h.object.matrixWorld)
         : dir.clone().negate();
-      best = { dist: h.distance, point: h.point.clone(), normal, surf: h.object.userData.surf || 'stone', mesh: h.object, instanced: h.instanceId !== undefined };
+      best = { dist: h.distance, point: h.point.clone(), normal, surf: h.object.userData.surf || 'stone', mesh: h.object, instanced: h.instanceId !== undefined, instanceId: h.instanceId };
     }
     const tt = rayTerrain(origin, dir, best ? best.dist : max);
     if (tt < (best ? best.dist : Infinity)) {
@@ -717,7 +799,7 @@ export function buildWorld(scene, opts = {}) {
   }
 
   return {
-    T, colliders, solids, spawns, heightAt, raycast, sun,
+    T, colliders, solids, spawns, heightAt, raycast, sun, scene, trees: treeApi,
     update(t, dt) { for (const u of updaters) u(t, dt); },
   };
 }

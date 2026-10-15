@@ -74,7 +74,8 @@ export function createTouch(root, { onTap }) {
   // 只有在遊戲操作中才攔截觸控；其他時候（死亡畫面、暫停選單）讓按鈕正常點
   function onStart(e) {
     if (!st.active) return;
-    if (e.target.closest?.('#slotSyr')) { e.preventDefault(); onTap?.('syringe'); return; }
+    const slot = e.target.closest?.('#hotbar .slot');
+    if (slot) { e.preventDefault(); onTap?.('slot', [...slot.parentNode.children].indexOf(slot)); return; }
     e.preventDefault();
     for (const t of e.changedTouches) {
       const el = t.target.closest?.('[data-b]');
@@ -129,6 +130,17 @@ export function createTouch(root, { onTap }) {
     consumeJump() { const j = st.jump; st.jump = false; return j; },
     consumeLook() { const d = { dx: st.lookDX, dy: st.lookDY }; st.lookDX = st.lookDY = 0; return d; },
     setAim(v) { st.aim = v; syncButtons(); },
+    // 手上換東西：開火鍵的圖示跟著換，非 AK 時把瞄準鍵藏起來
+    setMode(item) {
+      const label = item === 'rock' ? '揮' : item === 'plan' ? '放置' : null;
+      for (const id of ['#tFire', '#tFire2']) {
+        const b = root.querySelector(id);
+        b.innerHTML = label ? `<span>${label}</span>` : ICON_FIRE;
+      }
+      btn('aim').hidden = item !== 'ak';
+      btn('reload').hidden = item !== 'ak';
+      if (item !== 'ak') { st.aim = false; syncButtons(); }
+    },
     setActive(v) {
       st.active = v;
       root.hidden = !v;

@@ -71,6 +71,51 @@ export function createAudio() {
       let lp = 0;
       for (let i = 0; i < d.length; i++) { lp += ((Math.random() * 2 - 1) - lp) * 0.012; d[i] = lp * 3.5; }
     });
+    // 石頭敲木頭：低沉的「叩」+ 木頭共鳴
+    buf.chop = noise(0.3, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.15;
+        d[i] = (Math.sin(2 * Math.PI * 180 * t) * 0.7 + Math.sin(2 * Math.PI * 410 * t) * 0.3) * Math.exp(-t * 22)
+          + lp * 1.5 * Math.exp(-t * 60);
+      }
+    });
+    // 石頭敲到石頭/鐵：比較尖
+    buf.clunk = noise(0.2, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = ((Math.random() - 0.5) * 1.2 * Math.exp(-t * 70) + Math.sin(2 * Math.PI * 820 * t) * 0.35 * Math.exp(-t * 30));
+      }
+    });
+    // 揮空：風切聲
+    buf.whoosh = noise(0.35, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * (0.05 + 0.25 * Math.sin(Math.PI * t / 0.35));
+        d[i] = lp * 2.2 * Math.sin(Math.PI * Math.min(1, t / 0.35));
+      }
+    });
+    // 牆倒：一堆木頭碎裂
+    buf.crash = noise(1.2, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.08;
+        const crack = Math.random() < 0.004 * Math.exp(-t * 3) ? 1 : 0;
+        d[i] = lp * 2.5 * Math.exp(-t * 3) + crack * (Math.random() - 0.5) * 2 + Math.sin(2 * Math.PI * 60 * t) * Math.exp(-t * 6) * 0.6;
+      }
+    });
+    // 落地：悶悶的一聲
+    buf.land = noise(0.18, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.1;
+        d[i] = (lp * 2 + Math.sin(2 * Math.PI * 75 * t) * 0.8) * Math.exp(-t * 28);
+      }
+    });
     buf.inject = noise(0.5, (d, sr) => {
       for (let i = 0; i < d.length; i++) {
         const t = i / sr;
@@ -151,5 +196,12 @@ export function createAudio() {
       play('clack', { gain: 0.4, rate: 1.3, when: total * 0.86 });
     },
     inject() { play('inject', { gain: 0.8 }); play('click', { gain: 0.4, rate: 1.4, when: 0.05 }); },
+    chop(at, dist) { play('chop', { gain: at ? 1.2 : 0.7, rate: 0.9 + Math.random() * 0.2, at, dist }); },
+    clunk(at, dist) { play('clunk', { gain: at ? 1.0 : 0.5, rate: 0.9 + Math.random() * 0.2, at, dist }); },
+    whoosh(at, dist) { play('whoosh', { gain: at ? 0.8 : 0.35, rate: 0.9 + Math.random() * 0.2, at, dist }); },
+    land() { play('land', { gain: 0.35, rate: 0.9 + Math.random() * 0.2 }); },
+    crash(at, dist) { play('crash', { gain: 1.2, at, dist }); },
+    // 蓋牆：連敲三下槌子
+    build(at, dist) { for (let i = 0; i < 3; i++) play('chop', { gain: at ? 1 : 0.6, rate: 1.3 + i * 0.05, at, dist, when: i * 0.12 }); },
   };
 }

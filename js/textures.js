@@ -208,6 +208,33 @@ export function makeTextures() {
     grit(g, s, r, 600, 0.25, 0.12);
   }, 18);
 
+  // TC 工具櫃：木頭櫃子、兩扇門、中間一個鐵扣（UV 是整面 0~1，不會被切掉）
+  T.tc = make(128, (g, s, r) => {
+    g.fillStyle = '#7a5a36'; g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 6; i++) {
+      g.fillStyle = `rgba(0,0,0,${0.04 + r() * 0.1})`; g.fillRect(0, i * s / 6, s, s / 6);
+      g.fillStyle = 'rgba(40,25,10,0.5)'; g.fillRect(0, i * s / 6, s, 1);
+    }
+    g.strokeStyle = '#3e2a16'; g.lineWidth = 10; g.strokeRect(5, 5, s - 10, s - 10);
+    g.fillStyle = '#2e2014'; g.fillRect(s / 2 - 1.5, 10, 3, s - 20);
+    g.fillStyle = '#4a4a48'; g.fillRect(s / 2 - 7, s * 0.42, 14, 18);
+    g.fillStyle = '#8c8c86'; g.fillRect(s / 2 - 3, s * 0.42 + 5, 6, 8);
+    grit(g, s, r, 500);
+  }, 27);
+
+  // 建築藍圖：rust 的 Building Plan
+  T.blueprint = make(128, (g, s, r) => {
+    g.fillStyle = '#2d5f9a'; g.fillRect(0, 0, s, s);
+    g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 1;
+    for (let i = 0; i <= s; i += 8) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, s); g.moveTo(0, i); g.lineTo(s, i); g.stroke(); }
+    g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 2;
+    g.strokeRect(24, 34, 80, 60);
+    for (let x = 24; x <= 104; x += 16) { g.beginPath(); g.moveTo(x, 34); g.lineTo(x, 94); g.stroke(); }
+    g.fillStyle = 'rgba(255,255,255,0.85)'; g.font = 'bold 13px monospace'; g.textAlign = 'center';
+    g.fillText('WALL', s / 2, 116);
+    grit(g, s, r, 300, 0.12, 0.1);
+  }, 28);
+
   // 岩石：灰 + 苔蘚 + 裂紋
   T.rock = make(256, (g, s, r) => {
     g.fillStyle = '#7b7973'; g.fillRect(0, 0, s, s);

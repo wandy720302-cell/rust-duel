@@ -1,4 +1,5 @@
-// AK（rust 叫 Assault Rifle）：模型 + 第一人稱持槍視角（另開一個 scene 疊在最上層，槍才不會插進牆裡）
+// 手持物：AK（rust 叫 Assault Rifle）、石頭、建築藍圖。
+// 第一人稱視角另開一個 scene 疊在最上層，槍才不會插進牆裡。
 import * as THREE from 'three';
 
 export const AK = {
@@ -8,7 +9,11 @@ export const AK = {
   dmg: 30,
   mult: { head: 2.0, body: 1.0, legs: 0.75 },
   range: 320,
+  wallDmg: 10,   // 打木牆：一面牆要 35 發
 };
+
+// 石頭：rust 開局唯一的財產。敲樹拿木頭，也可以拿來敲人
+export const ROCK = { swing: 0.85, hitAt: 0.3, reach: 2.4, dmg: 20, headMult: 1.6, chop: 25, wallDmg: 25 };
 
 // rust AK 經典的「先往上、往左，再甩右、再甩左」S 型後座力（單位：度）
 export const RECOIL = Array.from({ length: 30 }, (_, i) => {
@@ -67,6 +72,34 @@ export function buildAK() {
   return { group: g, muzzle, mag };
 }
 
+// 同一個方向永遠回傳同一個值，共用頂點才不會裂開
+const jitter = (x, y, z) => Math.sin(x * 7.1 + y * 3.3 + z * 5.9) * 0.5 + Math.sin(x * 13.7 - y * 9.1 + z * 4.2) * 0.3;
+export function buildRock(radius, T) {
+  const geo = new THREE.IcosahedronGeometry(radius, 1);
+  const p = geo.attributes.position, v = new THREE.Vector3(), n = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i);
+    n.copy(v).normalize();
+    v.multiplyScalar(1 + 0.22 * jitter(n.x, n.y, n.z));
+    v.y *= 0.8;
+    p.setXYZ(i, v.x, v.y, v.z);
+  }
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({ map: T.rock, color: '#b9b4a8', roughness: 0.95, flatShading: true });
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = true;
+  return m;
+}
+
+export function buildPlan(T) {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(
+    new THREE.PlaneGeometry(0.2, 0.26),
+    new THREE.MeshStandardMaterial({ map: T.blueprint, roughness: 0.9, side: THREE.DoubleSide }),
+  ));
+  return g;
+}
+
 export function createViewmodel(T, skin = '#c99d7a') {
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(52, 1, 0.01, 10);
@@ -75,36 +108,57 @@ export function createViewmodel(T, skin = '#c99d7a') {
   key.position.set(0.6, 1, 0.4);
   scene.add(key);
 
-  // holder 負責位置/晃動，rig 把真實尺寸的槍縮小（視角武器都是縮過的，不然整個畫面都是槍）
-  const RIG = 0.6;
+  // holder 負責位置/晃動；每種手持物各一組 rig，切換時只顯示一組
+  const RIG = 0.6;   // 視角武器都是縮過的，不然整個畫面都是槍
   const holder = new THREE.Group();
   scene.add(holder);
-  const rig = new THREE.Group();
-  rig.scale.setScalar(RIG);
-  holder.add(rig);
-  const { group: ak, muzzle, mag } = buildAK();
-  rig.add(ak);
-
-  // 裸體手臂（rust 新手標配）：從手掌拉一條方柱到畫面外的手肘
   const sk = skinMat(skin);
   const Z = new THREE.Vector3(0, 0, 1);
-  const limb = (from, to, w, h) => {
+  const limb = (parent, from, to, w, h) => {
     const a = new THREE.Vector3(...from), b = new THREE.Vector3(...to);
     const d = b.clone().sub(a), len = d.length();
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, len), sk);
     m.position.copy(a).add(b).multiplyScalar(0.5);
     m.quaternion.setFromUnitVectors(Z, d.normalize());
-    rig.add(m);
+    parent.add(m);
     return m;
   };
-  const block = (w, h, d, x, y, z, rx = 0) => {
+  const block = (parent, w, h, d, x, y, z, rx = 0) => {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), sk);
-    m.position.set(x, y, z); m.rotation.x = rx; rig.add(m); return m;
+    m.position.set(x, y, z); m.rotation.x = rx; parent.add(m); return m;
   };
-  block(0.06, 0.09, 0.1, 0.008, -0.075, 0.035, -0.3);                 // 右手握把
-  limb([0.02, -0.1, 0.07], [0.16, -0.42, 0.5], 0.085, 0.08);          // 右前臂
-  block(0.075, 0.05, 0.13, -0.004, -0.03, -0.42);                     // 左手托護木
-  limb([-0.03, -0.05, -0.4], [-0.32, -0.42, -0.02], 0.085, 0.08);     // 左前臂
+
+  // --- AK ---
+  const akRig = new THREE.Group();
+  akRig.scale.setScalar(RIG);
+  holder.add(akRig);
+  const { group: ak, muzzle, mag } = buildAK();
+  akRig.add(ak);
+  block(akRig, 0.06, 0.09, 0.1, 0.008, -0.075, 0.035, -0.3);                 // 右手握把
+  limb(akRig, [0.02, -0.1, 0.07], [0.16, -0.42, 0.5], 0.085, 0.08);          // 右前臂
+  block(akRig, 0.075, 0.05, 0.13, -0.004, -0.03, -0.42);                     // 左手托護木
+  limb(akRig, [-0.03, -0.05, -0.4], [-0.32, -0.42, -0.02], 0.085, 0.08);     // 左前臂
+
+  // --- 石頭 ---
+  const rockRig = new THREE.Group();
+  holder.add(rockRig);
+  const rock = buildRock(0.075, T);
+  rock.position.set(0, 0.02, -0.02);
+  rockRig.add(rock);
+  block(rockRig, 0.07, 0.06, 0.09, 0.01, -0.035, 0.02);                      // 握著石頭的手
+  limb(rockRig, [0.02, -0.05, 0.05], [0.09, -0.2, 0.36], 0.065, 0.06);
+
+  // --- 建築藍圖 ---
+  const planRig = new THREE.Group();
+  holder.add(planRig);
+  const plan = buildPlan(T);
+  plan.scale.setScalar(0.55);
+  plan.rotation.set(-0.85, 0.15, 0.05);
+  planRig.add(plan);
+  block(planRig, 0.06, 0.03, 0.07, 0.07, -0.09, 0.02);
+  limb(planRig, [0.08, -0.1, 0.04], [0.16, -0.24, 0.36], 0.06, 0.055);
+
+  const rigs = { ak: akRig, rock: rockRig, plan: planRig };
 
   const flash = new THREE.Sprite(new THREE.SpriteMaterial({
     map: T.flash, color: '#ffd59a', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
@@ -119,17 +173,30 @@ export function createViewmodel(T, skin = '#c99d7a') {
     ads: { p: [0, -0.097 * RIG, -0.1], r: [0, 0, 0] },
     sprint: { p: [0.1, -0.15, -0.22], r: [-0.35, 0.7, 0.25] },
     down: { p: [0.12, -0.42, -0.22], r: [-0.6, 0.2, 0] },
+    rock: { p: [0.17, -0.17, -0.3], r: [0.15, -0.35, 0.1] },
+    plan: { p: [0.13, -0.115, -0.3], r: [0.05, -0.25, 0] },
   };
 
-  const st = { kick: 0, kickRot: 0, swayX: 0, swayY: 0, phase: 0, flashT: 0, sprint: 0, down: 0, bob: 0 };
-  const p = new THREE.Vector3(), r = new THREE.Euler();
+  const st = {
+    kick: 0, kickRot: 0, swayX: 0, swayY: 0, phase: 0, flashT: 0, sprint: 0, down: 0, bob: 0,
+    item: 'ak', draw: 0, swing: -1, place: -1,
+  };
+  const p = new THREE.Vector3(), r = new THREE.Euler(), tmp = new THREE.Vector3();
   const ease = (t) => t * t * (3 - 2 * t);
   const bump = (t, a, b, c, d) => (t < a || t > d ? 0 : t < b ? ease((t - a) / (b - a)) : t < c ? 1 : 1 - ease((t - c) / (d - c)));
+  const showRig = (k) => { for (const [name, g] of Object.entries(rigs)) g.visible = name === k; };
+  showRig('ak');
 
   return {
     scene, cam, muzzle,
     setSkin(c) { sk.color.set(c); },
     setAspect(a) { cam.aspect = a; cam.updateProjectionMatrix(); },
+    // 換手上的東西：先放下再拿起來
+    setItem(k) {
+      if (k === st.item) return;
+      st.item = k; st.draw = 1; st.swing = -1; st.place = -1;
+      showRig(k);
+    },
     fire() {
       st.kick = Math.min(st.kick + 0.045, 0.07);
       st.kickRot = Math.min(st.kickRot + 0.05, 0.09);
@@ -139,11 +206,14 @@ export function createViewmodel(T, skin = '#c99d7a') {
       const s = 0.18 + Math.random() * 0.1;
       flash.scale.set(s, s, 1);
     },
+    swing() { st.swing = 0; },
+    place() { st.place = 0; },
     // o: { dt, ads(0..1), sprint(bool), speed, onGround, reload(-1 或 0..1), down(bool), mdx, mdy }
     update(o) {
       const dt = o.dt;
       st.sprint += ((o.sprint ? 1 : 0) - st.sprint) * (1 - Math.exp(-10 * dt));
       st.down += ((o.down ? 1 : 0) - st.down) * (1 - Math.exp(-9 * dt));
+      st.draw = Math.max(0, st.draw - dt * 3.2);
       st.kick *= Math.exp(-14 * dt);
       st.kickRot *= Math.exp(-11 * dt);
       st.swayX += (-o.mdx * 0.00035 - st.swayX) * (1 - Math.exp(-8 * dt));
@@ -154,22 +224,27 @@ export function createViewmodel(T, skin = '#c99d7a') {
       st.phase += dt * (6 + o.speed * 1.4) * (moving > 0.05 ? 1 : 0);
       st.bob += (moving - st.bob) * (1 - Math.exp(-8 * dt));
 
-      const a = o.ads;
-      p.set(...POSE.hip.p).lerp(new THREE.Vector3(...POSE.ads.p), a);
-      r.set(POSE.hip.r[0] * (1 - a), POSE.hip.r[1] * (1 - a), 0);
-      const sp = st.sprint, dn = st.down;
-      p.lerp(new THREE.Vector3(...POSE.sprint.p), sp);
-      r.x += (POSE.sprint.r[0] - r.x) * sp; r.y += (POSE.sprint.r[1] - r.y) * sp; r.z += (POSE.sprint.r[2] - r.z) * sp;
-      p.lerp(new THREE.Vector3(...POSE.down.p), dn);
+      const isAk = st.item === 'ak';
+      const a = isAk ? o.ads : 0;
+      if (isAk) {
+        p.set(...POSE.hip.p).lerp(tmp.set(...POSE.ads.p), a);
+        r.set(POSE.hip.r[0] * (1 - a), POSE.hip.r[1] * (1 - a), 0);
+      } else {
+        const pose = POSE[st.item];
+        p.set(...pose.p); r.set(...pose.r);
+      }
+      const sp = st.sprint, dn = Math.max(st.down, st.draw);
+      p.lerp(tmp.set(...POSE.sprint.p), sp * (isAk ? 1 : 0.4));
+      if (isAk) { r.x += (POSE.sprint.r[0] - r.x) * sp; r.y += (POSE.sprint.r[1] - r.y) * sp; r.z += (POSE.sprint.r[2] - r.z) * sp; }
+      p.lerp(tmp.set(...POSE.down.p), dn);
       r.x += (POSE.down.r[0] - r.x) * dn;
 
       const bobAmt = st.bob * (1 - a * 0.85) * (1 + sp * 0.8);
       p.x += Math.sin(st.phase) * 0.012 * bobAmt;
       p.y += Math.abs(Math.cos(st.phase)) * 0.014 * bobAmt - st.bob * 0.004;
       r.z += Math.sin(st.phase) * 0.015 * bobAmt;
-      // 呼吸
       const t = performance.now() / 1000;
-      p.y += Math.sin(t * 1.6) * 0.0025 * (1 - a * 0.7);
+      p.y += Math.sin(t * 1.6) * 0.0025 * (1 - a * 0.7);   // 呼吸
 
       p.x += st.swayX * (1 - a * 0.6); p.y += st.swayY * (1 - a * 0.6);
       r.y += st.swayX * 2; r.x += st.swayY * 1.5;
@@ -177,7 +252,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
 
       // 換彈動畫：傾斜 → 彈匣拔出 → 插回 → 拉槍機
       mag.position.set(0, -0.02, -0.17); mag.rotation.set(0, 0, 0);
-      if (o.reload >= 0) {
+      if (isAk && o.reload >= 0) {
         const q = o.reload;
         const tilt = bump(q, 0, 0.14, 0.82, 0.98);
         r.z += 0.55 * tilt; r.x += 0.12 * tilt; p.y -= 0.04 * tilt; p.x -= 0.03 * tilt;
@@ -185,6 +260,22 @@ export function createViewmodel(T, skin = '#c99d7a') {
         mag.position.y -= 0.32 * out; mag.position.z += 0.08 * out; mag.rotation.x = 0.6 * out;
         const bolt = bump(q, 0.78, 0.83, 0.85, 0.9);
         p.z += 0.03 * bolt; r.x += 0.08 * bolt;
+      }
+      // 揮石頭：舉起 → 往前下砸 → 收回
+      if (st.swing >= 0) {
+        st.swing += dt / ROCK.swing;
+        const q = st.swing;
+        const up = bump(q, 0, 0.3, 0.32, 0.38), hit = bump(q, 0.3, 0.4, 0.5, 0.9);
+        r.x += 0.7 * up - 1.1 * hit; p.y += 0.06 * up - 0.03 * hit; p.z -= 0.16 * hit; p.x -= 0.05 * hit;
+        r.z -= 0.3 * hit;
+        if (q >= 1) st.swing = -1;
+      }
+      // 放牆：藍圖往前推一下
+      if (st.place >= 0) {
+        st.place += dt / 0.4;
+        const k = bump(st.place, 0, 0.3, 0.4, 1);
+        p.z -= 0.08 * k; r.x -= 0.3 * k;
+        if (st.place >= 1) st.place = -1;
       }
       holder.position.copy(p);
       holder.rotation.copy(r);

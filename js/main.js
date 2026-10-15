@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { buildWorld } from './world.js';
 import { createBody, stepBody } from './physics.js';
 import { createAvatar, SKINS } from './avatar.js';
-import { createViewmodel, AK, RECOIL } from './weapon.js';
+import { createViewmodel, AK, RECOIL, ROCK } from './weapon.js';
+import { createBuilder, WALL } from './build.js';
 import { createEffects } from './effects.js';
 import { createAudio } from './audio.js';
 import { createNet, makeRoomCode, errText, hasTurn } from './net.js';
@@ -50,6 +51,8 @@ const fx = createEffects(scene, T);
 const audio = createAudio();
 audio.setVolume(settings.vol);
 const vm = createViewmodel(T, SKINS[0].skin);
+const builder = createBuilder(world, fx);
+const ITEMS = ['ak', 'rock', 'plan'];
 initHud();
 if (TOUCH) {
   document.querySelector('#clickToPlay .panel').innerHTML = '<b>點一下開始</b><small>會切成全螢幕 · 左邊搖桿移動、右邊拖曳轉視角 · 右上 ❚❚ 暫停</small>';
@@ -77,10 +80,11 @@ const S = {
   ads: 0, sprinting: false, speed: 0, stepAcc: 0,
   matchOver: false, wantRematch: false, oppWantRematch: false,
   deathAt: 0, sendAcc: 0, pingAcc: 0, mdx: 0, mdy: 0,
+  item: 'ak', wood: 0, swingT: -1, swingCd: 0, wasFiring: false, wallN: 0, lookAt: 0, build: null,
 };
 const opp = {
   avatar: null, snaps: [], prevPos: new THREE.Vector3(), stepAcc: 0,
-  cur: { pos: new THREE.Vector3(), yaw: 0, pitch: 0, crouch: 0, speed: 0, alive: true, g: 1 },
+  cur: { pos: new THREE.Vector3(), yaw: 0, pitch: 0, crouch: 0, speed: 0, alive: true, g: 1, item: 'ak' },
 };
 let dummy = null;
 let net = null;
@@ -93,9 +97,9 @@ const locked = () => document.pointerLockElement === canvas;
 const inputActive = () => (TOUCH ? touch.active : locked());
 
 const touch = createTouch($('touch'), {
-  onTap(b) {
+  onTap(b, idx) {
     if (b === 'reload') startReload();
-    else if (b === 'syringe') useSyringe();
+    else if (b === 'slot') selectSlot(idx);
     else if (b === 'pause') { releaseControl(); showPause(); }
   },
 });
@@ -137,8 +141,15 @@ addEventListener('keydown', (e) => {
   if (['Space', 'KeyC', 'Tab'].includes(e.code)) e.preventDefault();
   if (!locked()) return;
   if (e.code === 'KeyR') startReload();
-  if (e.code === 'Digit2') useSyringe();
+  const slot = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4 }[e.code];
+  if (slot !== undefined) selectSlot(slot);
 });
+// 滾輪在 AK / 石頭 / 木牆之間輪流切
+addEventListener('wheel', (e) => {
+  if (S.mode !== 'play' || !locked() || !S.alive) return;
+  const i = ITEMS.indexOf(S.item);
+  selectItem(ITEMS[(i + (e.deltaY > 0 ? 1 : ITEMS.length - 1)) % ITEMS.length]);
+}, { passive: true });
 addEventListener('keyup', (e) => keys.delete(e.code));
 addEventListener('blur', () => { keys.clear(); firing = aiming = false; });
 
@@ -255,6 +266,9 @@ function enterPlay() {
   S.matchOver = false; S.wantRematch = S.oppWantRematch = false;
   $('matchEnd').hidden = true;
   fx.clearHoles();
+  builder.clear();
+  world.trees.reset();
+  S.wood = 0; S.wallN = 0;
   spawn('bag');
   updateScore();
   $('clickToPlay').hidden = false;
@@ -313,13 +327,115 @@ function spawn(kind) {
   S.water = 30 + Math.random() * 20; S.food = 60 + Math.random() * 40;
   $('death').hidden = true;
   const w = $('wake'); w.classList.add('on'); void w.offsetWidth; w.classList.remove('on');
+  S.swingT = -1; S.swingCd = 0;
+  S.item = '';
+  selectItem('ak');
   hud.syringes(S.syringes);
+  hud.wood(S.wood, WALL.cost);
   sendState();
 }
 
 // ---------- 武器 ----------
+// 快捷欄：0 AK、1 針筒、2 石頭、3 木牆、4 木頭（只是顯示）
+function selectSlot(i) {
+  if (!S.alive) return;
+  if (i === 0) selectItem('ak');
+  else if (i === 1) useSyringe();
+  else if (i === 2) selectItem('rock');
+  else if (i === 3) selectItem('plan');
+  else hud.toast(`木頭 ${S.wood}：拿石頭敲樹可以拿更多`, 1500);
+}
+function selectItem(k) {
+  if (S.item === k) return;
+  S.item = k;
+  S.reload = -1; S.swingT = -1;
+  if (k !== 'ak') aiming = false;
+  vm.setItem(k);
+  touch.setMode(k);
+  hud.activeSlot({ ak: 0, rock: 2, plan: 3 }[k]);
+  if (k !== 'plan') { builder.showGhost(null); hud.hint(null); }
+  S.swingCd = 0.35;   // 拿出來要一點時間
+  S.fireCd = Math.max(S.fireCd, 0.3);
+}
+
+function startSwing() {
+  S.swingCd = ROCK.swing;
+  S.swingT = 0;
+  vm.swing();
+  audio.whoosh();
+  if (S.online) net.send({ t: 'sw' });
+}
+
+// 石頭砸下去的那一瞬間：先看有沒有敲到人，再看敲到樹、牆、還是別的
+function meleeHit() {
+  if (!S.alive) return;
+  aimEuler.set(S.pitch, S.yaw, 0);
+  const dir = new THREE.Vector3(0, 0, -1).applyEuler(aimEuler);
+  const origin = camera.position.clone();
+  const wh = world.raycast(origin, dir, ROCK.reach);
+  const target = S.online ? opp.avatar : dummy?.avatar;
+  const oh = target?.rayHit(origin, dir, wh ? wh.dist : ROCK.reach);
+  if (oh) {
+    const head = oh.part === 'head';
+    const dmg = Math.round(ROCK.dmg * (head ? ROCK.headMult : 1));
+    fx.blood(origin.clone().addScaledVector(dir, oh.dist));
+    audio.hit(head); audio.chop();
+    hud.hitmarker(head);
+    if (S.online) net.send({ t: 'hit', dmg, part: oh.part, from: v3(origin), w: 'rock' });
+    else dummyHit(dmg, oh.part, origin, 'rock');
+    return;
+  }
+  if (!wh) return;
+  fx.impact(wh.point, wh.normal, wh.surf);
+  const tree = world.trees.fromHit(wh);
+  const wall = builder.fromHit(wh);
+  if (tree) {
+    audio.chop();
+    const got = world.trees.chop(tree, ROCK.chop);
+    if (got > 0) {
+      S.wood += got;
+      hud.wood(S.wood, WALL.cost);
+      hud.pickup(`+${got} 木頭`);
+    }
+    if (S.online) net.send({ t: 'thit', k: tree.kind, i: tree.i, a: got, dx: +dir.x.toFixed(2), dz: +dir.z.toFixed(2) });
+    if (tree.wood <= 0) { world.trees.fell(tree, dir.x, dir.z); audio.crash(); }
+  } else if (wall) {
+    audio.chop();
+    hitWall(wall.id, ROCK.wallDmg);
+  } else audio.clunk();
+}
+
+// 牆的傷害由出手的人算，再廣播給對方；兩邊各自扣同樣的數字，結果一定一致
+function hitWall(id, dmg, remote = false) {
+  const w = builder.walls.get(id);
+  if (!w) return;
+  const pos = new THREE.Vector3(w.x, w.y + 1.4, w.z);
+  const res = builder.damage(id, dmg);
+  if (!remote && S.online) net.send({ t: 'whit', id, dmg });
+  if (res?.destroyed) {
+    audio.crash(remote ? pos : null, pos.distanceTo(camera.position));
+    if (w.owner === S.side) hud.toast('你的木牆被打爛了', 1500);
+  }
+}
+
+function tryPlace() {
+  const res = S.build;
+  if (!res) return;
+  if (!res.ok) { audio.empty(); hud.toast(res.reason, 1300); return; }
+  const desc = {
+    id: `${S.side}${++S.wallN}`, owner: S.side,
+    x: +res.x.toFixed(2), y: +res.y.toFixed(2), z: +res.z.toFixed(2), r: +res.r.toFixed(3),
+  };
+  builder.place(desc);
+  S.wood -= WALL.cost;
+  hud.wood(S.wood, WALL.cost);
+  vm.place();
+  audio.build();
+  if (S.online) net.send({ t: 'build', ...desc });
+}
+
 function startReload() {
-  if (!S.alive || S.reload >= 0 || S.inject >= 0 || S.ammo === AK.mag) return;
+  if (S.item !== 'ak' || !S.alive || S.reload >= 0 || S.inject >= 0 || S.ammo === AK.mag) return;
   S.reload = AK.reload;
   audio.reload(AK.reload);
 }
@@ -368,6 +484,8 @@ function fire() {
   } else if (wh) {
     fx.impact(wh.point, wh.normal, wh.surf);
     if (!wh.terrain && !wh.instanced) fx.hole(wh.point, wh.normal);
+    const wall = builder.fromHit(wh);
+    if (wall) hitWall(wall.id, AK.wallDmg);
   }
 
   camera.updateMatrixWorld();
@@ -400,7 +518,23 @@ function updateWeapon(dt) {
     const h = Math.min(S.regen, dt * 5);
     S.regen -= h; S.hp = Math.min(100, S.hp + h);
   }
-  const canFire = S.alive && inputActive() && !S.matchOver && S.reload < 0 && S.inject < 0 && !S.sprinting;
+  const ready = S.alive && inputActive() && !S.matchOver && S.inject < 0;
+  const pressed = firing && !S.wasFiring;
+  S.wasFiring = firing;
+  S.swingCd = Math.max(0, S.swingCd - dt);
+  if (S.swingT >= 0) {
+    S.swingT += dt;
+    if (S.swingT >= ROCK.hitAt) { S.swingT = -1; meleeHit(); }
+  }
+  if (S.item === 'rock') {
+    if (firing && ready && S.swingCd <= 0) startSwing();
+    return;
+  }
+  if (S.item === 'plan') {
+    if (pressed && ready && S.swingCd <= 0) tryPlace();
+    return;
+  }
+  const canFire = ready && S.reload < 0 && !S.sprinting;
   if (firing && canFire) {
     S.fireCd -= dt;
     while (S.fireCd <= 0) {
@@ -430,22 +564,26 @@ function onHit(m) {
   audio.hurt();
   hud.hurt(headingTo(from));
   S.punch -= 0.012;   // 被打到鏡頭會抖一下
-  if (S.hp <= 0) die({ by: S.oppName, part: m.part, dist: from.distanceTo(S.body.pos) });
+  if (S.hp <= 0) die({ by: S.oppName, part: m.part, dist: from.distanceTo(S.body.pos), w: m.w || 'ak' });
 }
 
 function die(info) {
   S.alive = false; S.hp = 0; S.deaths++;
-  firing = aiming = false; S.reload = -1; S.inject = -1;
+  firing = aiming = false; S.reload = -1; S.inject = -1; S.swingT = -1;
+  // rust：死了身上的東西全掉光
+  if (S.wood > 0) hud.toast(`死掉了，${S.wood} 木頭全掉光`, 2000);
+  S.wood = 0; hud.wood(0, WALL.cost);
+  builder.showGhost(null); hud.hint(null);
   S.deathAt = performance.now();
-  if (S.online) net.send({ t: 'dead', part: info.part, dist: +info.dist.toFixed(1) });
-  hud.killfeed(info.by, S.myName, { head: info.part === 'head', mine: true });
+  if (S.online) net.send({ t: 'dead', part: info.part, dist: +info.dist.toFixed(1), w: info.w });
+  hud.killfeed(info.by, S.myName, { head: info.part === 'head', mine: true, weapon: info.w });
   updateScore();
   releaseControl();
   const lost = S.online && S.deaths >= KILLS_TO_WIN;
   const PART = { head: '爆頭', body: '身體', legs: '腿' };
   $('killerCard').innerHTML = `
     <div><span class="lbl">擊殺你的人</span><span class="who">${escapeHtml(info.by)}</span></div>
-    <div><span class="lbl">武器</span>${ICON.ak}</div>
+    <div><span class="lbl">武器</span>${ICON[info.w] || ICON.ak}</div>
     <div><span class="lbl">距離</span>${info.dist.toFixed(1)} m</div>
     <div><span class="lbl">最後一槍</span>${PART[info.part] || '?'}</div>`;
   setTimeout(() => {
@@ -509,14 +647,14 @@ function checkRematch() {
 }
 
 // ---------- 稻草人（單人模式） ----------
-function dummyHit(dmg, part, origin) {
+function dummyHit(dmg, part, origin, w = 'ak') {
   if (!dummy.alive) return;
   dummy.hp -= dmg;
   if (dummy.hp <= 0) {
     dummy.alive = false;
     dummy.respawnAt = performance.now() + 2500;
     S.kills++;
-    hud.killfeed(S.myName, '稻草人 Bob', { head: part === 'head', mine: true });
+    hud.killfeed(S.myName, '稻草人 Bob', { head: part === 'head', mine: true, weapon: w });
     hud.toast(`擊殺！距離 ${origin.distanceTo(dummy.pos).toFixed(1)}m`, 1500);
     updateScore();
   }
@@ -548,7 +686,7 @@ function onMessage(m) {
     case 'full': lobbyStatus('這個房間已經有兩個人了（1v1）'); lobbyBusy(false); break;
     case 'st': {
       const prev = opp.snaps[opp.snaps.length - 1];
-      const snap = { t: now, pos: toV(m.p), yaw: m.y, pitch: m.x, crouch: m.c, speed: m.v, g: m.g, alive: !!m.a };
+      const snap = { t: now, pos: toV(m.p), yaw: m.y, pitch: m.x, crouch: m.c, speed: m.v, g: m.g, alive: !!m.a, item: ITEMS[m.w] || 'ak' };
       // 重生瞬移：不要從屍體位置滑過去
       if (prev && (prev.pos.distanceTo(snap.pos) > 8 || prev.alive !== snap.alive)) opp.snaps = [];
       opp.snaps.push(snap);
@@ -573,9 +711,29 @@ function onMessage(m) {
       break;
     }
     case 'hit': onHit(m); break;
+    case 'sw':
+      opp.avatar?.swing();
+      audio.whoosh(opp.cur.pos, opp.cur.pos.distanceTo(camera.position));
+      break;
+    case 'build': {
+      builder.place(m);
+      const at = new THREE.Vector3(m.x, m.y + 1, m.z);
+      audio.build(at, at.distanceTo(camera.position));
+      break;
+    }
+    case 'whit': hitWall(m.id, m.dmg, true); break;
+    case 'thit': {
+      const t = world.trees.get(m.k, m.i);
+      if (!t || !t.alive) break;
+      world.trees.chop(t, m.a);
+      const at = t.base.clone().setY(t.base.y + 1.2);
+      audio.chop(at, at.distanceTo(camera.position));
+      if (t.wood <= 0) { world.trees.fell(t, m.dx, m.dz); audio.crash(at, at.distanceTo(camera.position)); }
+      break;
+    }
     case 'dead':
       S.kills++;
-      hud.killfeed(S.myName, S.oppName, { head: m.part === 'head', mine: true });
+      hud.killfeed(S.myName, S.oppName, { head: m.part === 'head', mine: true, weapon: m.w || 'ak' });
       hud.toast(`擊殺 ${S.oppName}${m.part === 'head' ? '（爆頭）' : ''} · ${m.dist}m`, 2000);
       updateScore();
       if (S.kills >= KILLS_TO_WIN) setTimeout(() => endMatch(true), 1200);
@@ -592,6 +750,7 @@ function sendState() {
   net.send({
     t: 'st', p: v3(b.pos), y: +S.yaw.toFixed(3), x: +S.pitch.toFixed(3),
     c: +b.crouch.toFixed(2), v: +S.speed.toFixed(2), g: b.onGround ? 1 : 0, a: S.alive ? 1 : 0,
+    w: Math.max(0, ITEMS.indexOf(S.item)),
   });
 }
 
@@ -619,7 +778,7 @@ function updateOpp(dt, now) {
   c.pitch = lerp(a.pitch, b.pitch, k);
   c.crouch = lerp(a.crouch, b.crouch, k);
   c.speed = lerp(a.speed, b.speed, k);
-  c.alive = b.alive; c.g = b.g;
+  c.alive = b.alive; c.g = b.g; c.item = b.item;
   opp.avatar.update(c, dt);
   while (snaps.length > 2 && snaps[1].t < rt) snaps.shift();
 
@@ -706,7 +865,7 @@ function readInput(active) {
 function updatePlay(dt, now) {
   const b = S.body;
   const active = inputActive() && S.alive && !S.matchOver;
-  const inp = { ...readInput(active), ads: active && aiming && S.reload < 0 && S.inject < 0, yaw: S.yaw };
+  const inp = { ...readInput(active), ads: active && aiming && S.item === 'ak' && S.reload < 0 && S.inject < 0, yaw: S.yaw };
   if (TOUCH) {
     const { dx, dy } = touch.consumeLook();
     if (active) {
@@ -720,6 +879,7 @@ function updatePlay(dt, now) {
   if (S.alive) {
     const r = stepBody(b, inp, dt, world.colliders);
     S.sprinting = r.sprinting; S.speed = r.speed;
+    if (r.landed) audio.land();
     if (b.onGround && S.speed > 1 && b.crouch < 0.5) {
       S.stepAcc += S.speed * dt;
       if (S.stepAcc > (S.sprinting ? 2.3 : 1.9)) { S.stepAcc = 0; audio.step(S.sprinting ? 1.3 : 1); }
@@ -770,11 +930,35 @@ function updatePlay(dt, now) {
   hud.survival(S.water, S.food);
   hud.ammo(S.ammo, AK.mag, S.reload >= 0);
   hud.compass(S.yaw);
-  hud.crosshair(4 + spreadDeg() * 6, S.ads);
+  hud.crosshair(S.item === 'ak' ? 4 + spreadDeg() * 6 : 3, S.item === 'ak' ? S.ads : 0);
+  updateBuildAndLook(now);
   if (S.reload >= 0) hud.action('換彈中', 1 - S.reload / AK.reload);
   else if (S.inject >= 0) hud.action('注射中', 1 - S.inject / SYRINGE_TIME);
   else hud.action(null);
   updateDeathScreen(now);
+}
+
+// 拿著藍圖：每幀算預覽位置；平常：每 0.1 秒看一下準心對著什麼（牆的耐久、樹還剩多少）
+function updateBuildAndLook(now) {
+  if (S.item === 'plan' && S.alive && !S.matchOver) {
+    const others = [S.body.pos];
+    if (S.online && opp.cur.alive && opp.snaps.length) others.push(opp.cur.pos);
+    if (!S.online && dummy?.alive) others.push(dummy.pos);
+    S.build = builder.evaluate({ pos: S.body.pos, yaw: S.yaw, others, myCount: builder.countOf(S.side), wood: S.wood });
+    builder.showGhost(S.build);
+    hud.hint(S.build.ok ? `${TOUCH ? '按放置' : '左鍵放置'} · ${WALL.cost} 木頭（剩 ${WALL.max - builder.countOf(S.side)} 面）` : S.build.reason, S.build.ok);
+  } else S.build = null;
+  if (now - S.lookAt < 100) return;
+  S.lookAt = now;
+  if (!S.alive) { hud.look(null); return; }
+  aimEuler.set(S.pitch, S.yaw, 0);
+  const dir = new THREE.Vector3(0, 0, -1).applyEuler(aimEuler);
+  const wh = world.raycast(camera.position, dir, 14);
+  const wall = builder.fromHit(wh);
+  const tree = S.item === 'rock' && wh && wh.dist < ROCK.reach + 1 ? world.trees.fromHit(wh) : null;
+  if (wall) hud.look(`木牆 ${Math.max(0, Math.ceil(wall.hp))} / ${WALL.hp}`);
+  else if (tree) hud.look(`樹 · 還有 ${tree.wood} 木頭`);
+  else hud.look(null);
 }
 
 function frame(now) {

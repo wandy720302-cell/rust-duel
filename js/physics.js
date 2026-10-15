@@ -1,4 +1,8 @@
-// 玩家移動：垂直圓柱 vs 盒子/圓柱碰撞，能自動踩上 0.5m 以內的台階（樓梯、地基、箱子）。
+// 玩家移動：垂直圓柱 vs 盒子/圓柱/旋轉盒碰撞，能自動踩上 0.5m 以內的台階（樓梯、地基、箱子）。
+// 碰撞體種類：
+//   box  { min, max }                         軸對齊盒（建築、箱子）
+//   cyl  { x, z, r, y0, y1 }                  直立圓柱（樹幹、岩石、油桶）
+//   obox { cx, cz, hx, hz, ax, az, y0, y1 }   可任意轉角度的盒子（玩家蓋的木牆），(ax, az) 是本地 x 軸方向
 import { heightAt, BOUNDS, WATER_Y } from './world.js';
 
 export const RADIUS = 0.38;
@@ -10,16 +14,35 @@ const GRAV = 20;
 const JUMP = 6.6;        // 跳躍高度約 1.09m：翻得過半截牆、爬得上疊箱子
 const FOOT = RADIUS * 0.7;
 
+// 落地懲罰：跟 rust 一樣不能靠連跳保持速度
+const LAND_SLOW = 0.45;  // 落地瞬間水平速度剩幾成
+const LAND_T = 0.45;     // 之後這段時間內最高速度被壓低，連跳會越壓越久
+const JUMP_CD = 0.3;     // 落地後多久才能再跳
+
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 export function createBody(pos) {
-  return { pos: pos.clone(), vel: { x: 0, y: 0, z: 0 }, onGround: true, crouch: 0, h: STAND_H, inWater: false };
+  return {
+    pos: pos.clone(), vel: { x: 0, y: 0, z: 0 }, onGround: true, crouch: 0, h: STAND_H, inWater: false,
+    airT: 0, landT: 0, landMax: LAND_T, jumpCd: 0, hops: 0, sinceLand: 9,
+  };
 }
 
 function footOverlapBox(c, x, z, r) {
   const cx = clamp(x, c.min[0], c.max[0]), cz = clamp(z, c.min[2], c.max[2]);
   return (x - cx) ** 2 + (z - cz) ** 2 < r * r;
+}
+
+// 點到旋轉盒的最近距離：先轉進盒子的本地座標
+function oboxLocal(c, x, z) {
+  const dx = x - c.cx, dz = z - c.cz;
+  return [dx * c.ax + dz * c.az, -dx * c.az + dz * c.ax];
+}
+export function oboxDist2(c, x, z) {
+  const [lx, lz] = oboxLocal(c, x, z);
+  const ex = lx - clamp(lx, -c.hx, c.hx), ez = lz - clamp(lz, -c.hz, c.hz);
+  return ex * ex + ez * ez;
 }
 
 function groundAt(x, z, maxTop, cols) {
@@ -28,9 +51,9 @@ function groundAt(x, z, maxTop, cols) {
     if (c.type === 'box') {
       const top = c.max[1];
       if (top > g && top <= maxTop && footOverlapBox(c, x, z, FOOT)) g = top;
-    } else {
+    } else if (c.type === 'cyl') {
       if (c.y1 > g && c.y1 <= maxTop && Math.hypot(x - c.x, z - c.z) < c.r + FOOT * 0.5) g = c.y1;
-    }
+    } else if (c.y1 > g && c.y1 <= maxTop && oboxDist2(c, x, z) < FOOT * FOOT) g = c.y1;
   }
   return g;
 }
@@ -43,6 +66,12 @@ function ceilingAt(x, z, minBottom, cols) {
   return c0;
 }
 
+function push(p, v, nx, nz, amt) {
+  p.x += nx * amt; p.z += nz * amt;
+  const vn = v.x * nx + v.z * nz;
+  if (vn < 0) { v.x -= vn * nx; v.z -= vn * nz; }
+}
+
 function resolveXZ(b, cols, stepH) {
   const p = b.pos, v = b.vel;
   for (const c of cols) {
@@ -52,10 +81,8 @@ function resolveXZ(b, cols, stepH) {
       const dx = p.x - cx, dz = p.z - cz, d2 = dx * dx + dz * dz;
       if (d2 >= RADIUS * RADIUS) continue;
       if (d2 > 1e-10) {
-        const d = Math.sqrt(d2), nx = dx / d, nz = dz / d;
-        p.x += nx * (RADIUS - d); p.z += nz * (RADIUS - d);
-        const vn = v.x * nx + v.z * nz;
-        if (vn < 0) { v.x -= vn * nx; v.z -= vn * nz; }
+        const d = Math.sqrt(d2);
+        push(p, v, dx / d, dz / d, RADIUS - d);
       } else {
         // 圓心已經跑進盒子裡：從最近的一面推出去
         const pl = p.x - c.min[0] + RADIUS, pr = c.max[0] - p.x + RADIUS;
@@ -63,14 +90,28 @@ function resolveXZ(b, cols, stepH) {
         const m = Math.min(pl, pr, pb, pf);
         if (m === pl) p.x -= pl; else if (m === pr) p.x += pr; else if (m === pb) p.z -= pb; else p.z += pf;
       }
-    } else {
+    } else if (c.type === 'cyl') {
       if (c.y1 <= p.y + stepH || c.y0 >= p.y + b.h) continue;
       const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), min = RADIUS + c.r;
       if (d >= min || d < 1e-6) continue;
-      const nx = dx / d, nz = dz / d;
-      p.x += nx * (min - d); p.z += nz * (min - d);
-      const vn = v.x * nx + v.z * nz;
-      if (vn < 0) { v.x -= vn * nx; v.z -= vn * nz; }
+      push(p, v, dx / d, dz / d, min - d);
+    } else {
+      if (c.y1 <= p.y + stepH || c.y0 >= p.y + b.h) continue;
+      const [lx, lz] = oboxLocal(c, p.x, p.z);
+      const qx = clamp(lx, -c.hx, c.hx), qz = clamp(lz, -c.hz, c.hz);
+      const ex = lx - qx, ez = lz - qz, d2 = ex * ex + ez * ez;
+      if (d2 >= RADIUS * RADIUS) continue;
+      let nlx, nlz, amt;
+      if (d2 > 1e-10) {
+        const d = Math.sqrt(d2);
+        nlx = ex / d; nlz = ez / d; amt = RADIUS - d;
+      } else {
+        const px = c.hx - Math.abs(lx) + RADIUS, pz = c.hz - Math.abs(lz) + RADIUS;
+        if (px < pz) { nlx = Math.sign(lx) || 1; nlz = 0; amt = px; }
+        else { nlx = 0; nlz = Math.sign(lz) || 1; amt = pz; }
+      }
+      // 法線轉回世界座標
+      push(p, v, nlx * c.ax - nlz * c.az, nlx * c.az + nlz * c.ax, amt);
     }
   }
 }
@@ -91,12 +132,17 @@ export function stepBody(b, inp, dt, cols) {
   b.crouch += clamp(target - b.crouch, -dt * 7, dt * 7);
   b.h = lerp(STAND_H, CROUCH_H, b.crouch);
 
+  b.jumpCd = Math.max(0, b.jumpCd - dt);
+  b.landT = Math.max(0, b.landT - dt);
+  b.sinceLand += dt;
+
   b.inWater = b.pos.y < WATER_Y - 0.5;
   const sprinting = inp.sprint && inp.fwd > 0 && b.crouch < 0.3 && !inp.ads;
   let speed = sprinting ? 6.9 : 4.6;
   speed = lerp(speed, 2.3, b.crouch);
   if (inp.ads) speed *= 0.72;
   if (b.inWater) speed *= 0.55;
+  if (b.landT > 0) speed *= 1 - 0.55 * (b.landT / b.landMax);
 
   const s = Math.sin(inp.yaw), c = Math.cos(inp.yaw);
   let wx = -s * inp.fwd + c * inp.right;
@@ -107,9 +153,15 @@ export function stepBody(b, inp, dt, cols) {
   b.vel.x += (wx * speed - b.vel.x) * k;
   b.vel.z += (wz * speed - b.vel.z) * k;
 
-  if (inp.jump && b.onGround && b.crouch < 0.5) { b.vel.y = JUMP; b.onGround = false; }
+  let jumped = false;
+  if (inp.jump && b.onGround && b.crouch < 0.5 && b.jumpCd <= 0) {
+    b.vel.y = JUMP; b.onGround = false; jumped = true;
+    // 落地後很快又跳 = 在兔子跳，懲罰一次比一次重
+    b.hops = b.sinceLand < 0.9 ? Math.min(b.hops + 1, 3) : 0;
+  }
   b.vel.y -= GRAV * dt;
 
+  const wasGround = b.onGround;
   const stepH = b.onGround ? STEP : AIR_STEP;
   const prevY = b.pos.y;
   b.pos.x += b.vel.x * dt;
@@ -131,5 +183,20 @@ export function stepBody(b, inp, dt, cols) {
   } else {
     b.onGround = false;
   }
-  return { sprinting, speed: Math.hypot(b.vel.x, b.vel.z) };
+
+  let landed = false;
+  if (b.onGround) {
+    if (!wasGround && b.airT > 0.25) {
+      landed = true;
+      const mul = LAND_SLOW / (1 + b.hops * 0.35);
+      b.vel.x *= mul; b.vel.z *= mul;
+      b.landMax = LAND_T * (1 + b.hops * 0.6);
+      b.landT = b.landMax;
+      b.jumpCd = JUMP_CD;
+      b.sinceLand = 0;
+    }
+    b.airT = 0;
+  } else b.airT += dt;
+
+  return { sprinting, speed: Math.hypot(b.vel.x, b.vel.z), landed, jumped };
 }
