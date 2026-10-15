@@ -79,7 +79,9 @@ function hash3(x, y, z, seed) {
     + Math.sin(-x * 11.1 + y * 9.2 + z * 13.7 + seed * 2.3) * 0.2;
 }
 
-export function buildWorld(scene) {
+// opts.mobile：手機降畫質（陰影解析度減半、草少三分之二、霧濃一點，剛好把遠景少畫的部分遮掉）
+export function buildWorld(scene, opts = {}) {
+  const mobile = !!opts.mobile;
   const T = makeTextures();
   const colliders = [];   // 玩家碰撞：{type:'box',min,max} | {type:'cyl',x,z,r,y0,y1}
   const solids = [];      // 子彈會打到的 mesh
@@ -133,7 +135,7 @@ export function buildWorld(scene) {
   // ---------- 天空、光線、霧 ----------
   // rust 那種「陰天但有太陽」的灰綠霧感：地平線偏暖灰，天頂偏冷藍
   const FOG = new THREE.Color('#b9bdb5');
-  scene.fog = new THREE.FogExp2(FOG, 0.0105);
+  scene.fog = new THREE.FogExp2(FOG, mobile ? 0.0125 : 0.0105);
   scene.background = FOG;
 
   const sunDir = new THREE.Vector3(0.55, 0.62, 0.35).normalize();
@@ -171,7 +173,7 @@ export function buildWorld(scene) {
   const sun = new THREE.DirectionalLight('#ffe3bf', 2.7);
   sun.position.copy(sunDir).multiplyScalar(110);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
   Object.assign(sun.shadow.camera, { left: -68, right: 68, top: 68, bottom: -68, near: 10, far: 260 });
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.05;
@@ -600,7 +602,7 @@ export function buildWorld(scene) {
     // 法線全部朝上，草才不會因為三角形方向一明一暗
     const n = geo.attributes.normal;
     for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
-    const N = 14000;
+    const N = mobile ? 4500 : 14000;
     const im = new THREE.InstancedMesh(geo, mat, N);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), c = new THREE.Color(), e = new THREE.Euler();
     let k = 0;

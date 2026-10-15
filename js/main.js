@@ -7,6 +7,7 @@ import { createEffects } from './effects.js';
 import { createAudio } from './audio.js';
 import { createNet, makeRoomCode, errText, hasTurn } from './net.js';
 import { initHud, hud, ICON } from './hud.js';
+import { createTouch, isTouchDevice } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -20,6 +21,8 @@ const SEND_HZ = 20;
 const INTERP_MS = 110;     // 對手畫面延遲這麼多來做內插，換取不抖
 const BAG_CD = 6, BEACH_CD = 3;
 const SYRINGE_TIME = 1.3;
+const TOUCH = isTouchDevice();   // 手機/平板：觸控操作 + 降畫質 + 輔助瞄準
+document.body.classList.toggle('touch', TOUCH);
 
 // ---------- 設定 ----------
 const settings = { sens: 1, fov: 80, vol: 0.8 };
@@ -29,7 +32,7 @@ const saveSettings = () => { try { localStorage.setItem('rustduel.settings', JSO
 // ---------- 畫面 ----------
 const canvas = $('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(devicePixelRatio, TOUCH ? 1.25 : 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -41,13 +44,17 @@ const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.05, 700);
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
-const world = buildWorld(scene);
+const world = buildWorld(scene, { mobile: TOUCH });
 const T = world.T;
 const fx = createEffects(scene, T);
 const audio = createAudio();
 audio.setVolume(settings.vol);
 const vm = createViewmodel(T, SKINS[0].skin);
 initHud();
+if (TOUCH) {
+  document.querySelector('#clickToPlay .panel').innerHTML = '<b>點一下開始</b><small>會切成全螢幕 · 左邊搖桿移動、右邊拖曳轉視角 · 右上 ❚❚ 暫停</small>';
+  document.querySelector('.foot').textContent = '非官方致敬作品 · 手機請橫著拿 · 手機玩家有輔助瞄準';
+}
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -82,9 +89,39 @@ let net = null;
 const keys = new Set();
 let firing = false, aiming = false;
 const locked = () => document.pointerLockElement === canvas;
+// 電腦靠 pointer lock、手機靠觸控層，兩邊都叫「操作中」
+const inputActive = () => (TOUCH ? touch.active : locked());
+
+const touch = createTouch($('touch'), {
+  onTap(b) {
+    if (b === 'reload') startReload();
+    else if (b === 'syringe') useSyringe();
+    else if (b === 'pause') { releaseControl(); showPause(); }
+  },
+});
+
+function enterFullscreen() {
+  const el = document.documentElement;
+  if (document.fullscreenElement || !el.requestFullscreen) return;
+  el.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => screen.orientation?.lock?.('landscape'))
+    .catch(() => { /* iPhone 的 Safari 不給全螢幕，橫著拿就好 */ });
+}
+
+// 回到操作狀態（一定要在點擊事件裡呼叫，瀏覽器才肯鎖滑鼠/開全螢幕）
+function resumeControl() {
+  audio.unlock();
+  $('pause').hidden = true; $('clickToPlay').hidden = true;
+  if (TOUCH) { enterFullscreen(); touch.setActive(true); return; }
+  requestLock();
+}
+function releaseControl() {
+  firing = aiming = false;
+  if (TOUCH) { touch.setActive(false); touch.setAim(false); return; }
+  if (document.pointerLockElement) document.exitPointerLock();
+}
 
 function requestLock() {
-  audio.unlock();
   try {
     const p = canvas.requestPointerLock({ unadjustedMovement: true });
     if (p?.catch) p.catch(() => { try { canvas.requestPointerLock(); } catch { /* 太快重鎖會被瀏覽器拒絕 */ } });
@@ -130,7 +167,7 @@ document.addEventListener('pointerlockchange', () => {
     if (S.mode === 'play' && S.alive && !S.matchOver) showPause();
   }
 });
-$('clickToPlay').addEventListener('click', () => requestLock());
+$('clickToPlay').addEventListener('click', () => resumeControl());
 
 // ---------- 暫停 / 設定 ----------
 function bindSlider(id, key, fmt, apply) {
@@ -145,7 +182,7 @@ bindSlider('sens', 'sens', (v) => v.toFixed(2));
 bindSlider('fov', 'fov', (v) => `${v}°`);
 bindSlider('vol', 'vol', (v) => `${Math.round(v * 100)}%`, () => audio.setVolume(settings.vol));
 function showPause() { $('pause').hidden = false; }
-$('btnResume').addEventListener('click', () => { $('pause').hidden = true; requestLock(); });
+$('btnResume').addEventListener('click', () => resumeControl());
 $('btnLeave').addEventListener('click', leave);
 $('btnEndLeave').addEventListener('click', leave);
 function leave() {
@@ -211,6 +248,7 @@ $('btnSolo').addEventListener('click', () => { readName(); audio.unlock(); start
 // ---------- 開局 ----------
 function enterPlay() {
   S.mode = 'play';
+  document.body.classList.add('playing');
   $('lobby').hidden = true;
   hud.show(true);
   S.kills = S.deaths = 0;
@@ -362,7 +400,7 @@ function updateWeapon(dt) {
     const h = Math.min(S.regen, dt * 5);
     S.regen -= h; S.hp = Math.min(100, S.hp + h);
   }
-  const canFire = S.alive && locked() && !S.matchOver && S.reload < 0 && S.inject < 0 && !S.sprinting;
+  const canFire = S.alive && inputActive() && !S.matchOver && S.reload < 0 && S.inject < 0 && !S.sprinting;
   if (firing && canFire) {
     S.fireCd -= dt;
     while (S.fireCd <= 0) {
@@ -402,7 +440,7 @@ function die(info) {
   if (S.online) net.send({ t: 'dead', part: info.part, dist: +info.dist.toFixed(1) });
   hud.killfeed(info.by, S.myName, { head: info.part === 'head', mine: true });
   updateScore();
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseControl();
   const lost = S.online && S.deaths >= KILLS_TO_WIN;
   const PART = { head: '爆頭', body: '身體', legs: '腿' };
   $('killerCard').innerHTML = `
@@ -417,8 +455,8 @@ function die(info) {
 }
 const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-$('btnBag').addEventListener('click', () => { spawn('bag'); requestLock(); });
-$('btnBeach').addEventListener('click', () => { spawn('beach'); requestLock(); });
+$('btnBag').addEventListener('click', () => { spawn('bag'); resumeControl(); });
+$('btnBeach').addEventListener('click', () => { spawn('beach'); resumeControl(); });
 
 function updateDeathScreen(now) {
   if ($('death').hidden) return;
@@ -439,7 +477,7 @@ function endMatch(win, reason) {
   S.matchOver = true;
   firing = aiming = false;
   $('death').hidden = true; $('pause').hidden = true; $('clickToPlay').hidden = true;
-  if (document.pointerLockElement) document.exitPointerLock();
+  releaseControl();
   const t = $('endTitle');
   if (reason) {
     t.textContent = reason; t.className = '';
@@ -609,18 +647,76 @@ function lobbyCam(t) {
   camera.lookAt(0, 2, -4);
 }
 
-function updatePlay(dt, now) {
-  const b = S.body;
-  const active = locked() && S.alive && !S.matchOver;
-  const inp = {
+// 手機輔助瞄準：準心靠近對手時視角變黏（轉速減半），開鏡或開火時再往身上吸。
+// 垂直方向只吸一半 —— 後座力還是要自己往下拉，不然就不是 rust 了。
+const assist = { los: false, losAt: 0 };
+const asA = new THREE.Vector3(), asB = new THREE.Vector3();
+function aimAssist(dt, now) {
+  if (!S.alive) return 1;
+  let tgt = null;
+  if (S.online) { if (opp.avatar && opp.snaps.length && opp.cur.alive) tgt = opp.cur; }
+  else if (dummy?.alive) tgt = { pos: dummy.pos, crouch: 0 };
+  if (!tgt) return 1;
+  asA.set(tgt.pos.x, tgt.pos.y + 1.25 - tgt.crouch * 0.45, tgt.pos.z);
+  const to = asB.copy(asA).sub(camera.position);
+  const dist = to.length();
+  if (dist > 90 || dist < 0.5) return 1;
+  let dyaw = Math.atan2(-to.x, -to.z) - S.yaw;
+  dyaw = Math.atan2(Math.sin(dyaw), Math.cos(dyaw));
+  const dpitch = Math.atan2(to.y, Math.hypot(to.x, to.z)) - S.pitch;
+  // 判定範圍跟著距離縮：近的時候大方一點，遠的時候只剩 3 度
+  const cone = clamp(Math.atan2(1.5, dist), deg(3), deg(10)) * lerp(1, 1.3, S.ads);
+  if (Math.hypot(dyaw, dpitch) > cone) return 1;
+  if (now - assist.losAt > 120) {   // 隔牆不幫，視線每 120ms 檢查一次
+    assist.losAt = now;
+    const wh = world.raycast(camera.position, to.clone().normalize(), dist);
+    assist.los = !wh || wh.dist > dist - 0.6;
+  }
+  if (!assist.los) return 1;
+  if (firing || S.ads > 0.5) {
+    const k = 1 - Math.exp(-(firing ? 5 : 3) * dt);
+    S.yaw += dyaw * k;
+    S.pitch = clamp(S.pitch + dpitch * k * 0.5, -1.52, 1.52);
+  }
+  return 0.5;
+}
+
+function readInput(active) {
+  if (TOUCH) {
+    firing = active && touch.fire;
+    aiming = active && touch.aim;
+    // 搖桿是類比的：推一半就走一半速度
+    return {
+      fwd: active ? -touch.my : 0,
+      right: active ? touch.mx : 0,
+      jump: active && touch.consumeJump(),
+      sprint: active && touch.sprint && !firing,
+      crouch: active && touch.crouch,
+    };
+  }
+  return {
     fwd: active ? (keys.has('KeyW') ? 1 : 0) - (keys.has('KeyS') ? 1 : 0) : 0,
     right: active ? (keys.has('KeyD') ? 1 : 0) - (keys.has('KeyA') ? 1 : 0) : 0,
     jump: active && keys.has('Space'),
     sprint: active && (keys.has('ShiftLeft') || keys.has('ShiftRight')) && !firing,
     crouch: active && keys.has('KeyC'),
-    ads: active && aiming && S.reload < 0 && S.inject < 0,
-    yaw: S.yaw,
   };
+}
+
+function updatePlay(dt, now) {
+  const b = S.body;
+  const active = inputActive() && S.alive && !S.matchOver;
+  const inp = { ...readInput(active), ads: active && aiming && S.reload < 0 && S.inject < 0, yaw: S.yaw };
+  if (TOUCH) {
+    const { dx, dy } = touch.consumeLook();
+    if (active) {
+      const k = 0.0045 * settings.sens * (camera.fov / settings.fov) * aimAssist(dt, now);
+      S.yaw -= dx * k;
+      S.pitch = clamp(S.pitch - dy * k, -1.52, 1.52);
+      S.mdx += dx; S.mdy += dy;
+    }
+    inp.yaw = S.yaw;
+  }
   if (S.alive) {
     const r = stepBody(b, inp, dt, world.colliders);
     S.sprinting = r.sprinting; S.speed = r.speed;

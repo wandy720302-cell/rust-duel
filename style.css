@@ -232,3 +232,101 @@ input:focus { border-color: rgba(205, 65, 43, 0.7); }
 
 #wake { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 8; transition: opacity 1.4s ease-out; }
 #wake.on { opacity: 1; transition: none; }
+
+/* ---------- 手機觸控 ---------- */
+body.touch { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; touch-action: none; }
+body.touch input { -webkit-user-select: text; user-select: text; }
+#touch { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
+#touch .tbtn {
+  position: absolute; pointer-events: auto; border: 0; border-radius: 50%; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(30, 30, 27, 0.5); color: var(--text); font: 700 14px var(--font);
+  box-shadow: inset 0 0 0 2px rgba(216, 211, 198, 0.25);
+  -webkit-tap-highlight-color: transparent;
+}
+#touch .tbtn.on { background: rgba(79, 134, 184, 0.65); box-shadow: inset 0 0 0 2px rgba(150, 195, 235, 0.8); }
+#touch .tbtn svg { width: 70%; fill: #e9e4d8; }
+/* 右下一組弧形按鈕，開火最大顆、拇指最好按 */
+#tFire { width: 84px; height: 84px; right: calc(30px + env(safe-area-inset-right)); bottom: 34px; background: rgba(205, 65, 43, 0.55); }
+#tFire.on { background: rgba(226, 86, 61, 0.85); }
+#tAim { width: 60px; height: 60px; right: calc(128px + env(safe-area-inset-right)); bottom: 30px; }
+#tJump { width: 56px; height: 56px; right: calc(30px + env(safe-area-inset-right)); bottom: 132px; }
+#tCrouch { width: 52px; height: 52px; right: calc(100px + env(safe-area-inset-right)); bottom: 112px; }
+#tReload { width: 48px; height: 48px; right: calc(176px + env(safe-area-inset-right)); bottom: 96px; font-size: 12px; }
+/* 左手也能開火：拇指在搖桿上方 */
+#tFire2 { width: 58px; height: 58px; left: calc(34px + env(safe-area-inset-left)); bottom: 170px; background: rgba(205, 65, 43, 0.4); }
+#tFire2.on { background: rgba(226, 86, 61, 0.8); }
+#tPause { width: 40px; height: 40px; left: calc(14px + env(safe-area-inset-left)); top: 12px; border-radius: 4px; font-size: 13px; }
+
+/* 浮動搖桿：手指按下的地方就是中心，放開回到左下角待命 */
+#tStick {
+  position: absolute; left: calc(100px + env(safe-area-inset-left)); top: calc(100% - 100px);
+  width: 112px; height: 112px; margin: -56px 0 0 -56px; border-radius: 50%;
+  background: rgba(30, 30, 27, 0.28); box-shadow: inset 0 0 0 2px rgba(216, 211, 198, 0.2);
+  opacity: 0.55; transition: opacity .15s;
+}
+#tStick.held { opacity: 1; }
+#tKnob {
+  position: absolute; left: 50%; top: 50%; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%;
+  background: rgba(216, 211, 198, 0.55);
+}
+#tStick.sprint #tKnob { background: rgba(230, 160, 60, 0.85); }
+
+/* 手機橫向螢幕：HUD 全部縮小，狀態條搬到左上，不要擋到按鈕 */
+body.touch #status { right: auto; left: calc(62px + env(safe-area-inset-left)); top: 10px; bottom: auto; width: 170px; gap: 3px; }
+body.touch #status .row { height: 18px; }
+body.touch #status .row .ic { width: 18px; height: 18px; font-size: 11px; }
+body.touch #status .row .bar { height: 12px; }
+body.touch #status .row .val { font-size: 11px; width: 24px; }
+body.touch #ammoBox { order: 9; align-self: flex-start; padding: 2px 8px; margin: 2px 0 0; }
+body.touch #ammoNow { font-size: 22px; }
+body.touch #ammoBox small { display: none; }
+body.touch #hotbar { bottom: 8px; gap: 3px; }
+body.touch .slot { width: 46px; height: 46px; }
+body.touch .slot .ico { width: 40px; height: 13px; }
+body.touch .slot .qty { font-size: 10px; }
+body.touch .slot:nth-child(n+4) { display: none; }
+body.touch #compass { top: 6px; width: 240px; height: 26px; }
+body.touch .tick { top: 5px; } body.touch .tick.major { top: 3px; font-size: 13px; }
+body.touch #score { top: 36px; font-size: 12px; }
+body.touch #score b { font-size: 20px; }
+body.touch #score em { display: none; }
+body.touch #killfeed { top: 8px; right: 10px; }
+body.touch .kf { font-size: 11px; padding: 3px 7px; }
+body.touch .kf .ico { width: 32px; height: 10px; }
+body.touch #ping { display: none; }
+body.touch #toast { top: 74px; font-size: 13px; }
+
+/* 手機大廳／死亡畫面：高度很矮，要擠一擠 */
+@media (max-height: 500px) {
+  #lobby { padding: 0 4vw; overflow-y: auto; align-items: flex-start; }
+  .menu { padding: 14px 0; width: 320px; }
+  .logo { font-size: 44px; }
+  .logo span { font-size: 18px; margin-top: 2px; }
+  .tag { margin: 6px 0 10px; font-size: 13px; }
+  .btn { padding: 10px 14px; margin: 5px 0; font-size: 15px; }
+  input { padding: 9px 12px; font-size: 15px; }
+  #roomCode { font-size: 32px; }
+  .foot { display: none; }
+  .deadTitle { font-size: 40px; }
+  .deadSub { margin: 4px 0 12px; }
+  #killerCard { margin-bottom: 12px; padding: 8px 14px; gap: 14px; font-size: 13px; }
+  .spawnCard { width: 200px; padding: 10px 12px; }
+  .panel.wide { width: 340px; padding: 14px 20px; }
+  .panel h2 { margin-bottom: 6px; }
+  .slider { margin: 6px 0; }
+  #endTitle { font-size: 38px; }
+}
+
+/* 直著拿：叫他轉過來 */
+#rotate { display: none; }
+@media (orientation: portrait) {
+  body.touch.playing #rotate {
+    display: flex; position: fixed; inset: 0; z-index: 50; background: #151513;
+    flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center;
+  }
+  #rotate b { font-size: 20px; letter-spacing: .1em; }
+  #rotate small { color: var(--dim); }
+  #rotate .phone { width: 46px; height: 78px; border: 3px solid var(--text); border-radius: 8px; animation: turn 1.6s ease-in-out infinite; }
+}
+@keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
