@@ -109,6 +109,8 @@ export const hud = {
     $('cross').style.setProperty('--gap', spreadPx + 'px');
     $('cross').classList.toggle('ads', ads > 0.6);
   },
+  sight(short) { $('slotAk').dataset.sight = short; },
+  scope(on) { $('scopeOverlay').classList.toggle('on', on); },
   // 快捷欄：0=AK 2=石頭 3=木牆
   activeSlot(i) {
     document.querySelectorAll('#hotbar .slot').forEach((el, k) => el.classList.toggle('active', k === i));

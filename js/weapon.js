@@ -12,6 +12,14 @@ export const AK = {
   wallDmg: 10,   // 打木牆：一面牆要 35 發
 };
 
+// 瞄具：y = 瞄準線在槍身座標的高度，z = 開鏡時整把槍往前/後擺多少，fov = 開鏡時視野剩幾成
+export const SIGHTS = {
+  iron: { name: '機械照門', short: '照門', y: 0.097, z: -0.1, fov: 0.6 },
+  holo: { name: '全息紅點', short: '紅點', y: 0.1245, z: -0.07, fov: 0.48 },
+  scope: { name: '8 倍鏡', short: '8倍', y: 0.122, z: -0.02, fov: 0.125 },
+};
+export const SIGHT_ORDER = ['iron', 'holo', 'scope'];
+
 // 石頭：rust 開局唯一的財產。敲樹拿木頭，也可以拿來敲人
 export const ROCK = { swing: 0.85, hitAt: 0.3, reach: 2.4, dmg: 20, headMult: 1.6, chop: 25, wallDmg: 25 };
 
@@ -69,7 +77,45 @@ export function buildAK() {
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0.018, -0.93);
   g.add(muzzle);
-  return { group: g, muzzle, mag };
+
+  // --- 全息紅點：架在防塵蓋上，一個方框 + 一片玻璃 + 紅點 ---
+  const black = new THREE.MeshStandardMaterial({ color: '#1c1d1f', roughness: 0.5, metalness: 0.4 });
+  const holo = new THREE.Group();
+  const hb = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), black); m.position.set(x, y, z); m.castShadow = true; holo.add(m); };
+  hb(0.03, 0.012, 0.08, 0, 0.089, -0.16);        // 底座
+  hb(0.05, 0.016, 0.04, 0, 0.1, -0.17);          // 下殼
+  hb(0.006, 0.042, 0.02, -0.023, 0.124, -0.17);  // 左框
+  hb(0.006, 0.042, 0.02, 0.023, 0.124, -0.17);   // 右框
+  hb(0.052, 0.006, 0.024, 0, 0.147, -0.17);      // 上框
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.036), new THREE.MeshStandardMaterial({
+    color: '#8fc9c0', transparent: true, opacity: 0.16, roughness: 0.05, metalness: 0.6, depthWrite: false,
+  }));
+  glass.position.set(0, 0.1245, -0.175);
+  holo.add(glass);
+  const dot = new THREE.Mesh(new THREE.CircleGeometry(0.0011, 12), new THREE.MeshBasicMaterial({ color: '#ff2a14', toneMapped: false }));
+  dot.position.set(0, 0.1245, -0.174);
+  holo.add(dot);
+  holo.visible = false;
+  g.add(holo);
+
+  // --- 8 倍鏡：兩個鏡環 + 長鏡筒 ---
+  const scope = new THREE.Group();
+  const sb = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), black); m.position.set(x, y, z); m.castShadow = true; scope.add(m); };
+  sb(0.03, 0.012, 0.2, 0, 0.089, -0.15);         // 鏡座
+  sb(0.012, 0.03, 0.02, 0, 0.104, -0.07);        // 前後鏡環
+  sb(0.012, 0.03, 0.02, 0, 0.104, -0.22);
+  const scopeTube = (r1, r2, len, z) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, len, 14).rotateX(Math.PI / 2), black);
+    m.position.set(0, 0.122, z); m.castShadow = true; scope.add(m);
+  };
+  scopeTube(0.016, 0.016, 0.2, -0.145);   // 鏡筒
+  scopeTube(0.024, 0.017, 0.06, -0.27);   // 物鏡端
+  scopeTube(0.017, 0.021, 0.05, -0.02);   // 目鏡端
+  scope.visible = false;
+  g.add(scope);
+
+  const setSight = (k) => { holo.visible = k === 'holo'; scope.visible = k === 'scope'; };
+  return { group: g, muzzle, mag, setSight };
 }
 
 // 同一個方向永遠回傳同一個值，共用頂點才不會裂開
@@ -132,7 +178,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
   const akRig = new THREE.Group();
   akRig.scale.setScalar(RIG);
   holder.add(akRig);
-  const { group: ak, muzzle, mag } = buildAK();
+  const { group: ak, muzzle, mag, setSight: setAkSight } = buildAK();
   akRig.add(ak);
   block(akRig, 0.06, 0.09, 0.1, 0.008, -0.075, 0.035, -0.3);                 // 右手握把
   limb(akRig, [0.02, -0.1, 0.07], [0.16, -0.42, 0.5], 0.085, 0.08);          // 右前臂
@@ -170,7 +216,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
   // 開鏡時讓「照門缺口 → 準星」這條線剛好落在畫面正中央（槍身座標 y=0.097）
   const POSE = {
     hip: { p: [0.12, -0.12, -0.27], r: [0, 0.03, 0] },
-    ads: { p: [0, -0.097 * RIG, -0.1], r: [0, 0, 0] },
+    ads: { p: [0, -0.097 * RIG, -0.1], r: [0, 0, 0] },   // 會依瞄具改寫
     sprint: { p: [0.1, -0.15, -0.22], r: [-0.35, 0.7, 0.25] },
     down: { p: [0.12, -0.42, -0.22], r: [-0.6, 0.2, 0] },
     rock: { p: [0.17, -0.17, -0.3], r: [0.15, -0.35, 0.1] },
@@ -179,7 +225,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
 
   const st = {
     kick: 0, kickRot: 0, swayX: 0, swayY: 0, phase: 0, flashT: 0, sprint: 0, down: 0, bob: 0,
-    item: 'ak', draw: 0, swing: -1, place: -1,
+    item: 'ak', draw: 0, swing: -1, place: -1, sight: 'iron',
   };
   const p = new THREE.Vector3(), r = new THREE.Euler(), tmp = new THREE.Vector3();
   const ease = (t) => t * t * (3 - 2 * t);
@@ -191,6 +237,12 @@ export function createViewmodel(T, skin = '#c99d7a') {
     scene, cam, muzzle,
     setSkin(c) { sk.color.set(c); },
     setAspect(a) { cam.aspect = a; cam.updateProjectionMatrix(); },
+    // 換瞄具：開鏡時讓新瞄具的瞄準線落在畫面正中央
+    setSight(k) {
+      st.sight = k;
+      setAkSight(k);
+      POSE.ads.p = [0, -SIGHTS[k].y * RIG, SIGHTS[k].z];
+    },
     // 換手上的東西：先放下再拿起來
     setItem(k) {
       if (k === st.item) return;

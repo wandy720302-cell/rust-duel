@@ -46,7 +46,7 @@ export function createAvatar(scene, look, T) {
   const aim = new THREE.Group();
   aim.position.y = 0.6;
   upper.add(aim);
-  const { group: ak, muzzle } = buildAK();
+  const { group: ak, muzzle, setSight: setAkSight } = buildAK();
   ak.position.set(0.1, -0.06, -0.38);
   aim.add(ak);
   // 第三人稱手上的石頭 / 藍圖（跟 AK 三選一）
@@ -101,6 +101,7 @@ export function createAvatar(scene, look, T) {
       st.crouch = s.crouch;
       aim.rotation.x = s.pitch;
       if (s.item && s.item !== st.item) { st.item = s.item; showItem(s.item); }
+      if (s.sight && s.sight !== st.sight) { st.sight = s.sight; setAkSight(s.sight); }
       // 揮石頭：手臂整組往上抬再往下砸
       if (st.swing >= 0) {
         st.swing += dt / ROCK.swing;

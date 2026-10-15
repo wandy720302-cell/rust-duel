@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { buildWorld } from './world.js';
 import { createBody, stepBody } from './physics.js';
 import { createAvatar, SKINS } from './avatar.js';
-import { createViewmodel, AK, RECOIL, ROCK } from './weapon.js';
+import { createViewmodel, AK, RECOIL, ROCK, SIGHTS, SIGHT_ORDER } from './weapon.js';
 import { createBuilder, WALL } from './build.js';
 import { createEffects } from './effects.js';
 import { createAudio } from './audio.js';
@@ -80,11 +80,11 @@ const S = {
   ads: 0, sprinting: false, speed: 0, stepAcc: 0,
   matchOver: false, wantRematch: false, oppWantRematch: false,
   deathAt: 0, sendAcc: 0, pingAcc: 0, mdx: 0, mdy: 0,
-  item: 'ak', wood: 0, swingT: -1, swingCd: 0, wasFiring: false, wallN: 0, lookAt: 0, build: null,
+  item: 'ak', sight: 'iron', scoped: false, wood: 0, swingT: -1, swingCd: 0, wasFiring: false, wallN: 0, lookAt: 0, build: null,
 };
 const opp = {
   avatar: null, snaps: [], prevPos: new THREE.Vector3(), stepAcc: 0,
-  cur: { pos: new THREE.Vector3(), yaw: 0, pitch: 0, crouch: 0, speed: 0, alive: true, g: 1, item: 'ak' },
+  cur: { pos: new THREE.Vector3(), yaw: 0, pitch: 0, crouch: 0, speed: 0, alive: true, g: 1, item: 'ak', sight: 'iron' },
 };
 let dummy = null;
 let net = null;
@@ -100,6 +100,7 @@ const touch = createTouch($('touch'), {
   onTap(b, idx) {
     if (b === 'reload') startReload();
     else if (b === 'slot') selectSlot(idx);
+    else if (b === 'scope') cycleSight();
     else if (b === 'pause') { releaseControl(); showPause(); }
   },
 });
@@ -141,6 +142,7 @@ addEventListener('keydown', (e) => {
   if (['Space', 'KeyC', 'Tab'].includes(e.code)) e.preventDefault();
   if (!locked()) return;
   if (e.code === 'KeyR') startReload();
+  if (e.code === 'KeyV') cycleSight();
   const slot = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4 }[e.code];
   if (slot !== undefined) selectSlot(slot);
 });
@@ -277,6 +279,7 @@ function enterPlay() {
   builder.clear();
   world.trees.reset();
   S.wood = 0; S.wallN = 0;
+  setSight(S.sight);
   spawn('bag');
   updateScore();
   $('clickToPlay').hidden = false;
@@ -344,6 +347,19 @@ function spawn(kind) {
 }
 
 // ---------- 武器 ----------
+// 瞄具：照門 → 全息紅點 → 8 倍鏡，輪流切
+function setSight(k) {
+  S.sight = k;
+  vm.setSight(k);
+  touch.setSightLabel(SIGHTS[k].short);
+  hud.sight(SIGHTS[k].short);
+}
+function cycleSight() {
+  if (!S.alive) return;
+  setSight(SIGHT_ORDER[(SIGHT_ORDER.indexOf(S.sight) + 1) % SIGHT_ORDER.length]);
+  hud.toast(`瞄具：${SIGHTS[S.sight].name}`, 1200);
+}
+
 // 快捷欄：0 AK、1 針筒、2 石頭、3 木牆、4 木頭（只是顯示）
 function selectSlot(i) {
   if (!S.alive) return;
@@ -694,7 +710,7 @@ function onMessage(m) {
     case 'full': lobbyStatus('這個房間已經有兩個人了（1v1）'); lobbyBusy(false); break;
     case 'st': {
       const prev = opp.snaps[opp.snaps.length - 1];
-      const snap = { t: now, pos: toV(m.p), yaw: m.y, pitch: m.x, crouch: m.c, speed: m.v, g: m.g, alive: !!m.a, item: ITEMS[m.w] || 'ak' };
+      const snap = { t: now, pos: toV(m.p), yaw: m.y, pitch: m.x, crouch: m.c, speed: m.v, g: m.g, alive: !!m.a, item: ITEMS[m.w] || 'ak', sight: SIGHT_ORDER[m.sc] || 'iron' };
       // 重生瞬移：不要從屍體位置滑過去
       if (prev && (prev.pos.distanceTo(snap.pos) > 8 || prev.alive !== snap.alive)) opp.snaps = [];
       opp.snaps.push(snap);
@@ -758,7 +774,7 @@ function sendState() {
   net.send({
     t: 'st', p: v3(b.pos), y: +S.yaw.toFixed(3), x: +S.pitch.toFixed(3),
     c: +b.crouch.toFixed(2), v: +S.speed.toFixed(2), g: b.onGround ? 1 : 0, a: S.alive ? 1 : 0,
-    w: Math.max(0, ITEMS.indexOf(S.item)),
+    w: Math.max(0, ITEMS.indexOf(S.item)), sc: SIGHT_ORDER.indexOf(S.sight),
   });
 }
 
@@ -786,7 +802,7 @@ function updateOpp(dt, now) {
   c.pitch = lerp(a.pitch, b.pitch, k);
   c.crouch = lerp(a.crouch, b.crouch, k);
   c.speed = lerp(a.speed, b.speed, k);
-  c.alive = b.alive; c.g = b.g; c.item = b.item;
+  c.alive = b.alive; c.g = b.g; c.item = b.item; c.sight = b.sight;
   opp.avatar.update(c, dt);
   while (snaps.length > 2 && snaps[1].t < rt) snaps.shift();
 
@@ -898,8 +914,12 @@ function updatePlay(dt, now) {
     S.speed = 0; S.sprinting = false;
   }
 
-  S.ads += ((inp.ads && !S.sprinting ? 1 : 0) - S.ads) * (1 - Math.exp(-14 * dt));
-  const fovTarget = lerp(settings.fov, settings.fov * 0.6, S.ads);
+  // 8 倍鏡舉起來慢一點
+  S.ads += ((inp.ads && !S.sprinting ? 1 : 0) - S.ads) * (1 - Math.exp(-(S.sight === 'scope' ? 9 : 14) * dt));
+  const fovTarget = lerp(settings.fov, settings.fov * SIGHTS[S.sight].fov, S.ads);
+  // 8 倍鏡開到底：換成全黑鏡框畫面，手上的槍不畫
+  S.scoped = S.alive && S.item === 'ak' && S.sight === 'scope' && S.ads > 0.85;
+  hud.scope(S.scoped);
   if (Math.abs(fovTarget - fovNow) > 0.01) { fovNow = fovTarget; camera.fov = fovNow; camera.updateProjectionMatrix(); }
 
   // 鏡頭高度：上樓梯時平滑跟上，不會一格一格抖
@@ -979,7 +999,7 @@ function frame(now) {
   fx.update(dt);
   renderer.clear();
   renderer.render(scene, camera);
-  if (S.mode === 'play' && S.alive) {
+  if (S.mode === 'play' && S.alive && !S.scoped) {
     renderer.clearDepth();
     renderer.render(vm.scene, vm.cam);
   }

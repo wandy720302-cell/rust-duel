@@ -15,6 +15,7 @@ export function createTouch(root, { onTap }) {
     <button class="tbtn fire" data-b="fire" id="tFire" aria-label="開火">${ICON_FIRE}</button>
     <button class="tbtn fire2" data-b="fire" id="tFire2" aria-label="開火">${ICON_FIRE}</button>
     <button class="tbtn" data-b="aim" id="tAim">瞄準</button>
+    <button class="tbtn" data-b="scope" id="tScope">照門</button>
     <button class="tbtn" data-b="jump" id="tJump">跳</button>
     <button class="tbtn" data-b="crouch" id="tCrouch">蹲</button>
     <button class="tbtn" data-b="reload" id="tReload">換彈</button>`;
@@ -130,6 +131,7 @@ export function createTouch(root, { onTap }) {
     consumeJump() { const j = st.jump; st.jump = false; return j; },
     consumeLook() { const d = { dx: st.lookDX, dy: st.lookDY }; st.lookDX = st.lookDY = 0; return d; },
     setAim(v) { st.aim = v; syncButtons(); },
+    setSightLabel(t) { btn('scope').textContent = t; },
     // 手上換東西：開火鍵的圖示跟著換，非 AK 時把瞄準鍵藏起來
     setMode(item) {
       const label = item === 'rock' ? '揮' : item === 'plan' ? '放置' : null;
@@ -139,6 +141,7 @@ export function createTouch(root, { onTap }) {
       }
       btn('aim').hidden = item !== 'ak';
       btn('reload').hidden = item !== 'ak';
+      btn('scope').hidden = item !== 'ak';
       if (item !== 'ak') { st.aim = false; syncButtons(); }
     },
     setActive(v) {
