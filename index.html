@@ -14,7 +14,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700;900&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+    { "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    } }
   </script>
 </head>
 <body>
@@ -97,13 +100,13 @@
     <div id="status">
       <div id="ammoBox"><span id="ammoNow">30</span><span id="ammoMax">/ 30</span><small>5.56 步槍彈</small></div>
       <div class="row" id="hpRow">
-        <span class="ic">✚</span><div class="bar"><div id="hpBar" class="fill hp"></div></div><span id="hpVal" class="val">100</span>
+        <span class="ic">✚</span><div class="bar"><div id="hpBar" class="fill hp"></div><span id="hpVal" class="val">100</span></div>
       </div>
       <div class="row">
-        <span class="ic"><svg viewBox="0 0 16 16"><path d="M8 1.5 C8 1.5 3 7.5 3 10.5 a5 5 0 0 0 10 0 C13 7.5 8 1.5 8 1.5z"/></svg></span><div class="bar"><div id="waterBar" class="fill water"></div></div><span id="waterVal" class="val">0</span>
+        <span class="ic"><svg viewBox="0 0 16 16"><path d="M8 1.5 C8 1.5 3 7.5 3 10.5 a5 5 0 0 0 10 0 C13 7.5 8 1.5 8 1.5z"/></svg></span><div class="bar"><div id="waterBar" class="fill water"></div><span id="waterVal" class="val">0</span></div>
       </div>
       <div class="row">
-        <span class="ic"><svg viewBox="0 0 16 16"><path d="M3 2 v5 a2 2 0 0 0 1.5 1.9 V14.5 h1.5 V8.9 A2 2 0 0 0 7.5 7 V2 h-1 v4 h-1 V2 h-1 v4 h-1 V2z M10.5 2 c-1.5 1-2 3-2 5 h1.5 v7.5 h1.5 V2z"/></svg></span><div class="bar"><div id="foodBar" class="fill food"></div></div><span id="foodVal" class="val">0</span>
+        <span class="ic"><svg viewBox="0 0 16 16"><path d="M3 2 v5 a2 2 0 0 0 1.5 1.9 V14.5 h1.5 V8.9 A2 2 0 0 0 7.5 7 V2 h-1 v4 h-1 V2 h-1 v4 h-1 V2z M10.5 2 c-1.5 1-2 3-2 5 h1.5 v7.5 h1.5 V2z"/></svg></span><div class="bar"><div id="foodBar" class="fill food"></div><span id="foodVal" class="val">0</span></div>
       </div>
     </div>
 
@@ -121,6 +124,7 @@
       <label class="slider">靈敏度 <span id="sensVal"></span><input id="sens" type="range" min="0.2" max="3" step="0.05"></label>
       <label class="slider">視野 FOV <span id="fovVal"></span><input id="fov" type="range" min="65" max="100" step="1"></label>
       <label class="slider">音量 <span id="volVal"></span><input id="vol" type="range" min="0" max="1" step="0.05"></label>
+      <label class="check"><input id="post" type="checkbox"> 畫面特效（泛光、調色）<small>電腦卡的話關掉</small></label>
       <button id="btnResume" class="btn primary">繼續</button>
       <button id="btnGuide2" class="btn ghost">遊戲說明</button>
       <button id="btnLeave" class="btn ghost">離開回大廳</button>

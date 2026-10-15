@@ -1,6 +1,8 @@
 // 玩家蓋的木牆：放置預覽（綠=可以蓋、紅=不行）、合法性檢查、耐久、被打爛。
+// 外觀是 rust 經典的木頭路障：一排削尖的直立原木，中間用麻繩綁兩圈。
 // 牆可以任意角度擺（跟著視角轉），碰撞用 physics.js 的 obox。
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { oboxDist2, RADIUS } from './physics.js';
 import { WATER_Y, BOUNDS } from './world.js';
 
@@ -20,10 +22,30 @@ export function createBuilder(world, fx) {
   const walls = new Map();
   const H = WALL.h + WALL.bury;
 
-  const bodyGeo = new THREE.BoxGeometry(WALL.w, H, WALL.t);
-  const postGeo = new THREE.BoxGeometry(0.16, H + 0.12, WALL.t + 0.1);
-  const beamGeo = new THREE.BoxGeometry(WALL.w, 0.14, WALL.t + 0.06);
-  const postMat = new THREE.MeshStandardMaterial({ color: '#4a3220', roughness: 0.95, map: T.bark });
+  const bodyGeo = new THREE.BoxGeometry(WALL.w, H, WALL.t);   // 預覽用
+  let seed = 1;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+  // 每面牆的原木高低、歪斜都不一樣（用牆的 id 當種子，雙方看到的一樣）
+  function barricadeGeos(id) {
+    seed = [...id].reduce((a, c) => a * 31 + c.charCodeAt(0), 7) % 2147483647 || 1;
+    const N = 9, r = 0.15, logs = [], tips = [], ropes = [];
+    for (let i = 0; i < N; i++) {
+      const x = -WALL.w / 2 + r + i * (WALL.w - 2 * r) / (N - 1);
+      const len = H - 0.3 + (rnd() - 0.5) * 0.3, rr = r * (0.85 + rnd() * 0.3);
+      const tilt = (rnd() - 0.5) * 0.06, zj = (rnd() - 0.5) * 0.05;
+      const log = new THREE.CylinderGeometry(rr, rr * 1.05, len, 8).translate(0, len / 2, 0);
+      const tip = new THREE.ConeGeometry(rr, 0.38, 8).translate(0, len + 0.19, 0);
+      for (const geo of [log, tip]) { geo.rotateZ(tilt); geo.translate(x, 0, zj); }
+      logs.push(log); tips.push(tip);
+    }
+    for (const hy of [WALL.bury + 0.45, WALL.bury + 1.45]) {
+      for (const side of [-1, 1]) {
+        ropes.push(new THREE.CylinderGeometry(0.035, 0.035, WALL.w + 0.04, 6).rotateZ(Math.PI / 2).translate(0, hy, side * 0.15));
+      }
+    }
+    return { logs: mergeGeometries(logs), tips: mergeGeometries(tips), ropes: mergeGeometries(ropes) };
+  }
 
   const ghostMat = new THREE.MeshBasicMaterial({ color: '#5fd16a', transparent: true, opacity: 0.35, depthWrite: false });
   const ghost = new THREE.Mesh(bodyGeo, ghostMat);
@@ -36,18 +58,14 @@ export function createBuilder(world, fx) {
     const g = new THREE.Group();
     g.position.set(x, y, z);
     g.rotation.y = r;
-    const mat = new THREE.MeshStandardMaterial({ map: T.wood, roughness: 0.9 });
-    const body = new THREE.Mesh(bodyGeo, mat);
-    body.position.y = H / 2;
-    const parts = [body];
-    for (const sx of [-1, 1]) {
-      const p = new THREE.Mesh(postGeo, postMat);
-      p.position.set(sx * (WALL.w / 2 - 0.02), (H + 0.12) / 2, 0);
-      parts.push(p);
-    }
-    const beam = new THREE.Mesh(beamGeo, postMat);
-    beam.position.y = WALL.bury + WALL.h * 0.55;
-    parts.push(beam);
+    // 每面牆自己一份材質，被打的時候才能單獨變暗
+    const mats = [
+      new THREE.MeshStandardMaterial({ map: T.bark, roughness: 0.95, envMapIntensity: 0.6 }),
+      new THREE.MeshStandardMaterial({ map: T.woodEnd, roughness: 0.9, envMapIntensity: 0.6 }),
+      new THREE.MeshStandardMaterial({ map: T.rope, roughness: 1, envMapIntensity: 0.6 }),
+    ];
+    const geos = barricadeGeos(id);
+    const parts = [new THREE.Mesh(geos.logs, mats[0]), new THREE.Mesh(geos.tips, mats[1]), new THREE.Mesh(geos.ropes, mats[2])];
     for (const m of parts) {
       m.castShadow = m.receiveShadow = true;
       m.userData = { surf: 'wood', wallId: id };
@@ -61,7 +79,7 @@ export function createBuilder(world, fx) {
       ax: Math.cos(r), az: -Math.sin(r), y0: y, y1: y + H,
     };
     colliders.push(col);
-    const rec = { id, owner, hp: WALL.hp, group: g, parts, col, mat, x, y, z, r };
+    const rec = { id, owner, hp: WALL.hp, group: g, parts, col, mats, x, y, z, r };
     walls.set(id, rec);
     return rec;
   }
@@ -74,7 +92,8 @@ export function createBuilder(world, fx) {
     for (const m of w.parts) { const k = solids.indexOf(m); if (k >= 0) solids.splice(k, 1); }
     const k = colliders.indexOf(w.col);
     if (k >= 0) colliders.splice(k, 1);
-    w.mat.dispose();
+    for (const m of w.mats) m.dispose();
+    for (const m of w.parts) m.geometry.dispose();
     if (shatter && fx) {
       const ax = Math.cos(w.r), az = -Math.sin(w.r);
       for (let i = -2; i <= 2; i++) for (const hy of [0.8, 1.6, 2.3]) {
@@ -90,7 +109,7 @@ export function createBuilder(world, fx) {
     if (!w) return null;
     w.hp -= dmg;
     const k = clamp(1 - w.hp / WALL.hp, 0, 1);
-    w.mat.color.setRGB(1 - k * 0.5, 1 - k * 0.55, 1 - k * 0.6);
+    for (const m of w.mats) m.color.setRGB(1 - k * 0.5, 1 - k * 0.55, 1 - k * 0.6);
     if (w.hp <= 0) { remove(id); return { destroyed: true, hp: 0 }; }
     return { destroyed: false, hp: w.hp };
   }

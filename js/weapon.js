@@ -33,8 +33,8 @@ export const RECOIL = Array.from({ length: 30 }, (_, i) => {
 const skinMat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.75 });
 
 export function buildAK() {
-  const metal = new THREE.MeshStandardMaterial({ color: '#3a3b3e', roughness: 0.45, metalness: 0.35 });
-  const metal2 = new THREE.MeshStandardMaterial({ color: '#4a4b4e', roughness: 0.5, metalness: 0.3 });
+  const metal = new THREE.MeshStandardMaterial({ color: '#3a3b3e', roughness: 0.5, metalness: 0.35, envMapIntensity: 0.25 });
+  const metal2 = new THREE.MeshStandardMaterial({ color: '#4a4b4e', roughness: 0.55, metalness: 0.3, envMapIntensity: 0.25 });
   const wood = new THREE.MeshStandardMaterial({ color: '#7a3a17', roughness: 0.55 });
   const woodDark = new THREE.MeshStandardMaterial({ color: '#5c2a10', roughness: 0.6 });
   const g = new THREE.Group();

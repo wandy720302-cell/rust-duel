@@ -9,6 +9,7 @@ import { createAudio } from './audio.js';
 import { createNet, makeRoomCode, errText, hasTurn } from './net.js';
 import { initHud, hud, ICON } from './hud.js';
 import { createTouch, isTouchDevice } from './touch.js';
+import { createPost } from './post.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -26,7 +27,7 @@ const TOUCH = isTouchDevice();   // 手機/平板：觸控操作 + 降畫質 + �
 document.body.classList.toggle('touch', TOUCH);
 
 // ---------- 設定 ----------
-const settings = { sens: 1, fov: 80, vol: 0.8 };
+const settings = { sens: 1, fov: 80, vol: 0.8, post: !TOUCH };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('rustduel.settings') || '{}')); } catch { /* 私密視窗 */ }
 const saveSettings = () => { try { localStorage.setItem('rustduel.settings', JSON.stringify(settings)); } catch { /* ignore */ } };
 
@@ -37,20 +38,25 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, TOUCH ? 1.25 : 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+renderer.toneMappingExposure = 1.0;
 renderer.autoClear = false;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.05, 700);
+const camera = new THREE.PerspectiveCamera(settings.fov, 1, 0.08, 2600);
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 
-const world = buildWorld(scene, { mobile: TOUCH });
+const world = buildWorld(scene, { mobile: TOUCH, renderer });
 const T = world.T;
 const fx = createEffects(scene, T);
 const audio = createAudio();
 audio.setVolume(settings.vol);
 const vm = createViewmodel(T, SKINS[0].skin);
+vm.scene.environment = world.env;
+// 後製（泛光 + 調色）；手機預設關掉省電
+const post = createPost(renderer, scene, camera, vm.scene, vm.cam);
+const applyPost = () => document.body.classList.toggle('post', !!settings.post);
+applyPost();
 const builder = createBuilder(world, fx);
 const ITEMS = ['ak', 'rock', 'plan'];
 initHud();
@@ -62,6 +68,7 @@ if (TOUCH) {
 function resize() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h);
+  post.setSize(w, h, renderer.getPixelRatio());
   camera.aspect = w / h; camera.updateProjectionMatrix();
   vm.setAspect(w / h);
 }
@@ -194,6 +201,8 @@ function bindSlider(id, key, fmt, apply) {
 bindSlider('sens', 'sens', (v) => v.toFixed(2));
 bindSlider('fov', 'fov', (v) => `${v}°`);
 bindSlider('vol', 'vol', (v) => `${Math.round(v * 100)}%`, () => audio.setVolume(settings.vol));
+$('post').checked = !!settings.post;
+$('post').addEventListener('change', () => { settings.post = $('post').checked; applyPost(); saveSettings(); });
 function showPause() { $('pause').hidden = false; }
 $('btnResume').addEventListener('click', () => resumeControl());
 $('btnLeave').addEventListener('click', leave);
@@ -419,7 +428,7 @@ function meleeHit() {
     if (got > 0) {
       S.wood += got;
       hud.wood(S.wood, WALL.cost);
-      hud.pickup(`+${got} 木頭`);
+      hud.pickup('木頭', `+${got}`);
     }
     if (S.online) net.send({ t: 'thit', k: tree.kind, i: tree.i, a: got, dx: +dir.x.toFixed(2), dz: +dir.z.toFixed(2) });
     if (tree.wood <= 0) { world.trees.fell(tree, dir.x, dir.z); audio.crash(); }
@@ -822,7 +831,7 @@ function updateOpp(dt, now) {
 // ---------- 主迴圈 ----------
 let last = performance.now();
 let fovNow = settings.fov;
-const fwdV = new THREE.Vector3();
+const fwdV = new THREE.Vector3(), sunNdc = new THREE.Vector3(), sunUv = new THREE.Vector2();
 
 function lobbyCam(t) {
   const a = t * 0.035 + 0.6;
@@ -997,11 +1006,20 @@ function frame(now) {
   if (S.mode === 'lobby') lobbyCam(now / 1000);
   else updatePlay(dt, now);
   fx.update(dt);
-  renderer.clear();
-  renderer.render(scene, camera);
-  if (S.mode === 'play' && S.alive && !S.scoped) {
-    renderer.clearDepth();
-    renderer.render(vm.scene, vm.cam);
+  const showVm = S.mode === 'play' && S.alive && !S.scoped;
+  if (settings.post) {
+    // 太陽在畫面上的位置：面向太陽、太陽沒跑出畫面太遠才開光束
+    camera.getWorldDirection(fwdV);
+    const facing = fwdV.dot(world.sunDir);
+    sunNdc.copy(world.sunDir).multiplyScalar(1000).add(camera.position).project(camera);
+    const vis = facing > 0 ? THREE.MathUtils.smoothstep(facing, 0.15, 0.6) * (1 - THREE.MathUtils.smoothstep(Math.max(Math.abs(sunNdc.x), Math.abs(sunNdc.y)), 1.1, 1.8)) : 0;
+    sunUv.set(sunNdc.x * 0.5 + 0.5, sunNdc.y * 0.5 + 0.5);
+    post.render(dt, now / 1000, showVm, sunUv, vis);
+  }
+  else {
+    renderer.clear();
+    renderer.render(scene, camera);
+    if (showVm) { renderer.clearDepth(); renderer.render(vm.scene, vm.cam); }
   }
   S.mdx = S.mdy = 0;
 }

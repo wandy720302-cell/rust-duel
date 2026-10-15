@@ -397,3 +397,30 @@ body.touch #pickups { right: auto; left: calc(62px + env(safe-area-inset-left));
   background: linear-gradient(180deg, transparent 0 49.6%, transparent 49.6% 50.4%, rgba(0,0,0,.85) 50.4% 70%, #000 70% 100%);
 }
 #touch #tScope { width: 46px; height: 46px; right: calc(200px + env(safe-area-inset-right)); bottom: 34px; font-size: 12px; color: #f0c06a; }
+
+/* 開了後製就交給 shader 做暗角，CSS 那層關掉 */
+body.post #grade { display: none; }
+.check { display: block; font-size: 14px; margin: 12px 0; color: var(--text); cursor: pointer; }
+.check input { width: auto; margin-right: 6px; accent-color: var(--accent); vertical-align: middle; }
+.check small { display: block; color: var(--dim); margin: 2px 0 0 22px; }
+
+/* ---------- rust 樣式的狀態條：圖示在外、數字在色條裡 ---------- */
+#status { width: 214px; gap: 3px; }
+#status .row { background: none; height: 22px; padding: 0; gap: 4px; }
+#status .row .ic { background: none; width: 20px; height: 22px; color: #f1ede4; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+#status .row .ic svg { fill: #f1ede4; filter: drop-shadow(0 1px 1px rgba(0,0,0,.6)); }
+#status .row .bar { height: 22px; background: rgba(28, 27, 24, .62); }
+#status .row .val { position: absolute; left: 7px; top: 0; line-height: 22px; width: auto; text-align: left; color: #fff; font-size: 14px; text-shadow: 0 1px 2px rgba(0,0,0,.6); }
+.fill.hp { background: #8cb23a; }
+.fill.water { background: #3c8fd2; }
+.fill.food { background: #df8a2b; }
+.slot .cond { position: absolute; left: 3px; bottom: 4px; width: 3px; height: 82%; background: #8cb23a; opacity: .85; }
+.pick {
+  display: flex; justify-content: space-between; width: 214px; padding: 4px 10px;
+  background: rgba(104, 140, 52, .78); color: #f4f2e8; font-size: 14px; font-weight: 700;
+}
+.pick b { font-weight: 900; }
+body.touch #status { width: 170px; }
+body.touch #status .row, body.touch #status .row .bar { height: 18px; }
+body.touch #status .row .val { line-height: 18px; font-size: 12px; }
+body.touch .pick { width: 170px; font-size: 12px; padding: 3px 8px; }

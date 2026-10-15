@@ -34,7 +34,7 @@ export function initHud() {
   ];
   $('hotbar').innerHTML = slots.map((s, i) => `
     <div class="slot ${i === 0 ? 'active' : ''}" ${s.id ? `id="${s.id}"` : ''} ${s.title ? `title="${s.title}"` : ''}>
-      <span class="key">${i + 1}</span>${s.icon || ''}<span class="qty"></span>
+      <span class="key">${i + 1}</span>${s.icon || ''}<span class="qty"></span>${i === 0 || i === 2 ? '<i class="cond"></i>' : ''}
     </div>`).join('');
 }
 
@@ -134,11 +134,11 @@ export const hud = {
     el.classList.toggle('bad', !ok);
   },
   // 右下角的撿取通知（rust 的 +25 Wood）
-  pickup(text) {
+  pickup(name, amount) {
     const box = $('pickups');
     const el = document.createElement('div');
     el.className = 'pick';
-    el.textContent = text;
+    el.innerHTML = `<span>${esc(name)}</span><b>${esc(amount)}</b>`;
     box.appendChild(el);
     setTimeout(() => el.classList.add('out'), 1600);
     setTimeout(() => el.remove(), 2100);
