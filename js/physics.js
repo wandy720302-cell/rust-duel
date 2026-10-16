@@ -78,6 +78,50 @@ function under(c, x, z, r) {
 const topOf = (c) => (c.type === 'box' ? c.max[1] : c.y1);
 const bottomOf = (c) => (c.type === 'box' ? c.min[1] : c.y0);
 
+// 不是玩家的東西（北極熊）用：把一個直立圓柱（半徑 r、高度 y0~y1）從碰撞體裡推出去；ignore 是自己的碰撞體
+export function pushCircle(p, r, y0, y1, cols, ignore = null) {
+  for (const c of cols) {
+    if (c === ignore || topOf(c) <= y0 || bottomOf(c) >= y1) continue;
+    let nx = 0, nz = 0, amt = 0;
+    if (c.type === 'box') {
+      const qx = clamp(p.x, c.min[0], c.max[0]), qz = clamp(p.z, c.min[2], c.max[2]);
+      const dx = p.x - qx, dz = p.z - qz, d = Math.hypot(dx, dz);
+      if (d >= r) continue;
+      if (d > 1e-6) { nx = dx / d; nz = dz / d; amt = r - d; }
+      else {
+        const cx = (c.min[0] + c.max[0]) / 2, cz = (c.min[2] + c.max[2]) / 2;
+        const ex = (c.max[0] - c.min[0]) / 2 - Math.abs(p.x - cx), ez = (c.max[2] - c.min[2]) / 2 - Math.abs(p.z - cz);
+        if (ex < ez) { nx = Math.sign(p.x - cx) || 1; amt = ex + r; } else { nz = Math.sign(p.z - cz) || 1; amt = ez + r; }
+      }
+    } else if (c.type === 'cyl') {
+      const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), min = r + c.r;
+      if (d >= min) continue;
+      if (d > 1e-6) { nx = dx / d; nz = dz / d; } else nx = 1;
+      amt = min - d;
+    } else if (c.type === 'obox') {
+      const [lx, lz] = oboxLocal(c, p.x, p.z);
+      const qx = clamp(lx, -c.hx, c.hx), qz = clamp(lz, -c.hz, c.hz);
+      const ex = lx - qx, ez = lz - qz, d = Math.hypot(ex, ez);
+      if (d >= r) continue;
+      let lnx = 0, lnz = 0;
+      if (d > 1e-6) { lnx = ex / d; lnz = ez / d; amt = r - d; }
+      else {
+        const px = c.hx - Math.abs(lx), pz = c.hz - Math.abs(lz);
+        if (px < pz) { lnx = Math.sign(lx) || 1; amt = px + r; } else { lnz = Math.sign(lz) || 1; amt = pz + r; }
+      }
+      // 本地 → 世界：本地 x 軸是 (ax, az)、z 軸是 (-az, ax)
+      nx = lnx * c.ax - lnz * c.az; nz = lnx * c.az + lnz * c.ax;
+    } else if (c.type === 'tri') {
+      const inside = pointInTri(p.x, p.z, c.p);
+      const [d, qx, qz] = nearestOnTriEdge(p.x, p.z, c.p);
+      if (!inside) { if (d >= r || d < 1e-9) continue; nx = (p.x - qx) / d; nz = (p.z - qz) / d; amt = r - d; }
+      else if (d > 1e-9) { nx = (qx - p.x) / d; nz = (qz - p.z) / d; amt = d + r; }
+      else continue;
+    } else continue;
+    p.x += nx * amt; p.z += nz * amt;
+  }
+}
+
 function groundAt(x, z, maxTop, cols) {
   let g = heightAt(x, z);
   for (const c of cols) {

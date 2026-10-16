@@ -1,6 +1,6 @@
 // 背包、容器、製作佇列、火爐冶煉的純邏輯。不碰畫面，node 也能直接測。
 // 一格的格式：{ id, n, d? }，d 是單一物品自己的資料（例如槍的彈匣剩幾發）。
-import { ITEMS, SMELT } from './items.js';
+import { ITEMS, SMELT, SMELT_OUT } from './items.js';
 
 export const HOT = 6, MAIN = 24;
 export const stackOf = (id) => ITEMS[id]?.stack || 1;
@@ -145,16 +145,18 @@ export const isEmpty = (slots) => slots.every((s) => !s);
 // ---------- 火爐 ----------
 // 格子：0 燃料（木頭）、1~2 礦石、3~5 成品
 export const FURNACE = { FUEL: 0, IN: [1, 2], OUT: [3, 4, 5], SIZE: 6 };
-const PRODUCT = { metal_ore: 'metal', sulfur_ore: 'sulfur' };
+const PRODUCT = SMELT_OUT;
 export function furnaceAccepts(j, id) {
   if (j === FURNACE.FUEL) return id === 'wood';
   if (FURNACE.IN.includes(j)) return !!PRODUCT[id];
   return false;
 }
-// 每過 1 秒：燒 1 木頭、煉 2 礦石。沒燃料或沒東西可煉就自動熄火（省得白燒）
+// 每過 1 秒：燒 1 木頭；每格礦石煉 2 個、熊肉 3 秒烤好一塊（每格各自累積進度）。
+// 沒燃料、沒東西可煉、或成品格滿了就自動熄火（省得白燒）
 export function smeltTick(f, dt) {
   if (!f.on) return false;
   f.acc = (f.acc || 0) + dt;
+  f.prog = f.prog || {};
   let changed = false;
   while (f.acc >= 1 && f.on) {
     f.acc -= 1;
@@ -163,11 +165,15 @@ export function smeltTick(f, dt) {
     let did = false;
     for (const k of FURNACE.IN) {
       const s = f.slots[k];
-      if (!s || !PRODUCT[s.id]) continue;
-      const amt = Math.min(SMELT.orePerSec, s.n);
-      const left = addToSlots(f.slots, PRODUCT[s.id], amt, null, FURNACE.OUT[0], FURNACE.OUT[FURNACE.OUT.length - 1] + 1);
+      const pr = s && PRODUCT[s.id];
+      if (!pr) { f.prog[k] = 0; continue; }
+      f.prog[k] = (f.prog[k] || 0) + pr[1];
+      const amt = Math.min(Math.floor(f.prog[k] + 1e-9), s.n);
+      if (amt <= 0) { did = true; continue; }   // 還在烤，這一秒還沒好
+      const left = addToSlots(f.slots, pr[0], amt, null, FURNACE.OUT[0], FURNACE.OUT[FURNACE.OUT.length - 1] + 1);
       const used = amt - left;
-      if (used > 0) { s.n -= used; if (s.n <= 0) f.slots[k] = null; did = true; }
+      if (used > 0) { f.prog[k] -= used; s.n -= used; if (s.n <= 0) { f.slots[k] = null; f.prog[k] = 0; } did = true; }
+      else f.prog[k] = Math.min(f.prog[k], 1);   // 成品格滿了：卡著
     }
     if (!did) { f.on = false; changed = true; break; }
     fuel.n -= SMELT.fuelPerSec;

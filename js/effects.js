@@ -47,6 +47,7 @@ export function createEffects(scene, T) {
       items.push({ obj: m, tracer: true, from: from.clone(), dir, total, t: 0 });
     },
     impact(point, normal, surf) {
+      if (surf === 'flesh') { this.blood(point); return; }
       const c = SURF_COLOR[surf] || SURF_COLOR.stone;
       const p = point.clone().addScaledVector(normal, 0.03);
       sprite(puffMat(c), p, 0.25, 0.55, normal.clone().multiplyScalar(0.8).add(new THREE.Vector3(0, 0.3, 0)), 2.2);

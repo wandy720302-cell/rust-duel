@@ -6,7 +6,7 @@ import * as INV from './inventory.js';
 
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const CATS = ['全部', '工具', '武器', '彈藥', '設施'];
+const CATS = ['全部', '工具', '武器', '彈藥', '設施', '醫療'];
 
 // 建築件的小圖
 const PIECE_ICON = {

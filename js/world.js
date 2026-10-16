@@ -1,6 +1,6 @@
 // 地圖：一張 rust 取樣的小島切片。
 // 西邊 A 基地（木頭）、東邊 B 基地（鐵皮），中間「S PERM KET」超市 + 停車場 + 貨櫃區，
-// 北邊針葉林和石灰岩壁，南邊沙灘。外圍一圈遠山，南邊是海。
+// 北邊針葉林和石灰岩壁，翻過山脊是一大片雪地（北極熊出沒），南邊沙灘。外圍一圈遠山，南邊是海。
 // 地圖左右鏡像（樹、岩石、貨櫃都是先生成左半邊再鏡射），兩邊出生點一樣公平。
 // 美術方向照 rust 官方截圖：晴天藍天積雲、強烈陽光、淡藍白色的空氣透視、黃綠色高草和野花、
 // 偏橘的暖色泥土、淺灰石灰岩、橘紅鏽鐵。
@@ -10,7 +10,7 @@ import { makeTextures, rng } from './textures.js';
 import { NODE_ORE } from './items.js';
 
 export const WATER_Y = -1.5;
-export const BOUNDS = { minX: -55, maxX: 55, minZ: -54, maxZ: 44 };
+export const BOUNDS = { minX: -55, maxX: 55, minZ: -118, maxZ: 44 };
 export const BASES = {
   A: { x: -38, z: -12, dir: 1 },   // dir：門朝哪個 x 方向（都朝向地圖中央）
   B: { x: 38, z: -12, dir: -1 },
@@ -26,10 +26,16 @@ function rawHeight(x, z) {
   let h = Math.cos(ax * 0.055) * 1.2 + Math.sin(z * 0.06 + 0.7) * 1.1
     + Math.sin(ax * 0.11 + z * 0.08) * 0.55 + Math.cos(ax * 0.23 - z * 0.19) * 0.18;
   h += smooth(-34, -62, z) * 7;          // 北邊山脊
+  h -= smooth(-64, -82, z) * 3;          // 翻過山脊往雪地緩降
+  h += smooth(-62, -76, z) * (Math.sin(ax * 0.075 + z * 0.06) * 1.6 + Math.cos(ax * 0.14 - z * 0.1) * 0.7);   // 雪地起伏
+  h += smooth(-102, -126, z) * 10;       // 雪地北邊的山壁
   h += smooth(44, 64, ax) * 6;           // 東西兩側山壁
   h = lerp(h, 0.4 - (z - 22) * 0.12, smooth(22, 40, z)); // 南邊緩降入海
   return h;
 }
+
+// 雪地：翻過北邊山脊之後全是雪（-54 附近開始零星積雪，-70 以北全白），邊界抖一下比較自然
+export function snowAt(x, z) { return smooth(-54, -70, z + 3.5 * Math.sin(x * 0.17) + 2 * Math.sin(x * 0.41 + 1)); }
 
 // 蓋房子的地方把地形整平
 const ZONES = [
@@ -49,7 +55,7 @@ export function heightAt(x, z) {
 }
 
 // 地圖外圍：北、東、西三面隆起一圈遠山，往南一路降進海裡（只有看的，走不到）
-const INNER = 120;
+const INNER = 150;
 function farHeight(x, z) {
   const cd = Math.max(Math.abs(x), Math.abs(z));
   const n = 0.5 + 0.3 * Math.sin(x * 0.021 + 1.3) * Math.cos(z * 0.017) + 0.2 * Math.sin(x * 0.053 + z * 0.041);
@@ -61,6 +67,7 @@ function farHeight(x, z) {
 const ROADS = [
   [[-34, -12], [-25, -7], [-15, 3], [-6, 5.6], [6, 5.6], [15, 3], [25, -7], [34, -12]],
   [[0, 5.6], [0, 14], [3, 24], [2, 34]],
+  [[0, -14], [1, -30], [-1, -44], [0, -58], [-2, -70], [1, -84], [0, -94]],   // 往北穿過山脊進雪地的小徑
 ];
 function distSeg(px, pz, ax, az, bx, bz) {
   const dx = bx - ax, dz = bz - az;
@@ -153,6 +160,10 @@ export function buildWorld(scene, opts = {}) {
     barrelBlue: std({ color: '#2d5a8c', roughness: 0.55, metalness: 0.4, map: T.container }),
     barrelYellow: std({ color: '#d4a92e', roughness: 0.55, metalness: 0.4, map: T.container }),
     jersey: std({ map: T.concrete, color: '#d8d4ca', roughness: 0.95 }),
+    snowCap: std({ color: '#eef3f6', roughness: 0.85 }),
+    cliffSnow: std({ map: T.cliff, color: '#f1f5f8', roughness: 0.9, flatShading: true }),
+    snowRock: std({ map: T.rock, vertexColors: true, flatShading: true }),
+    snowPine: std({ vertexColors: true, flatShading: true, roughness: 0.95, side: THREE.DoubleSide, emissive: '#141a1e' }),
     cone: std({ color: '#e0642a', roughness: 0.6 }),
     coneBand: std({ color: '#efece4', roughness: 0.5 }),
   };
@@ -202,7 +213,8 @@ export function buildWorld(scene, opts = {}) {
   // ---------- 天空、光線、霧 ----------
   // 晴天：天頂深藍、地平線淡藍白；太陽從南邊斜上方照過來
   const HORIZON = new THREE.Color('#c9dbe7');
-  scene.fog = new THREE.FogExp2(HORIZON, mobile ? 0.0085 : 0.0066);
+  const FOG_D = mobile ? 0.0085 : 0.0066;
+  scene.fog = new THREE.FogExp2(HORIZON.clone(), FOG_D);
   scene.background = HORIZON;
 
   const sunDir = new THREE.Vector3(0.42, 0.7, 0.58).normalize();
@@ -281,6 +293,7 @@ export function buildWorld(scene, opts = {}) {
     grassA: C('#5d7a2c'), grassB: C('#8a953a'), dry: C('#a89a50'), forest: C('#4c4a2c'),
     dirt: C('#8c6545'), shoulder: C('#7b5c3e'), rock: C('#a39d90'), sand: C('#d8c99f'),
     wet: C('#a08f6c'), foam: C('#eef2f0'), gravel: C('#8f877a'),
+    snow: C('#eef2f4'), snowShade: C('#cfdbe6'), trail: C('#b7aa98'),
   };
   // 北邊是森林，地上是針葉跟落葉
   const forestness = (x, z) => smooth(-20, -34, z) * (0.7 + 0.3 * Math.sin(x * 0.09 + z * 0.05)) + 0.5 * smooth(44, 52, Math.abs(x)) * (1 - smooth(10, 25, z));
@@ -296,6 +309,14 @@ export function buildWorld(scene, opts = {}) {
       }
       c.lerp(PAL.shoulder, (1 - smooth(2.6, 4.2, distRoad(x, z, 0))) * 0.9);
       c.lerp(PAL.dirt, (1 - smooth(1.2, 2.6, distRoad(x, z, 1))) * 0.9);
+      c.lerp(PAL.dirt, (1 - smooth(0.9, 2.2, distRoad(x, z, 2))) * 0.8);
+    }
+    // 雪：太陡的地方積不住，露出岩石；被踩過的小徑是灰灰的雪泥
+    const sn = snowAt(x, z);
+    if (sn > 0) {
+      c.lerp(PAL.snow, sn * (1 - 0.55 * smooth(0.3, 0.6, slope)));
+      c.lerp(PAL.snowShade, sn * 0.25 * (0.5 + 0.5 * Math.sin(x * 0.13 + z * 0.09)));
+      if (!outer) c.lerp(PAL.trail, sn * (1 - smooth(0.9, 2.2, distRoad(x, z, 2))) * 0.55);
     }
     c.lerp(PAL.rock, smooth(0.2, 0.42, slope));
     c.lerp(PAL.sand, smooth(17, 26, z) * (1 - smooth(1.6, 3.2, y)));
@@ -304,7 +325,7 @@ export function buildWorld(scene, opts = {}) {
     return c;
   }
   {
-    const SIZE = INNER * 2, SEG = mobile ? 150 : 200;
+    const SIZE = INNER * 2, SEG = mobile ? 180 : 250;
     const geo = new THREE.PlaneGeometry(SIZE, SIZE, SEG, SEG);
     geo.rotateX(-Math.PI / 2);
     const pos = geo.attributes.position;
@@ -361,7 +382,8 @@ export function buildWorld(scene, opts = {}) {
       const s = 6 + R() * 7;
       m4.compose(new THREE.Vector3(x, y - 1, z), q, new THREE.Vector3(s * 0.32, s, s * 0.32));
       far.setMatrixAt(k, m4);
-      far.setColorAt(k, cc.setHSL(0.3 + (R() - 0.5) * 0.04, 0.35, 0.14 + R() * 0.05, THREE.SRGBColorSpace));
+      const hue = 0.3 + (R() - 0.5) * 0.04, lit = 0.14 + R() * 0.05;
+      far.setColorAt(k, snowAt(x, z) > 0.5 ? cc.setHSL(0.57, 0.12, 0.62 + lit, THREE.SRGBColorSpace) : cc.setHSL(hue, 0.35, lit, THREE.SRGBColorSpace));
       k++;
     }
     far.count = k;
@@ -790,20 +812,73 @@ export function buildWorld(scene, opts = {}) {
   }
 
   // ---------- 石灰岩壁：北邊跟東西兩側的地圖邊緣，一層一層疊起來的淺灰岩 ----------
-  function cliffStack(x, z, size, seed) {
+  function cliffStack(x, z, size, seed, snowy = false) {
     const r = rng(seed);
     const g = Math.min(heightAt(x, z), heightAt(x + 3, z), heightAt(x - 3, z), heightAt(x, z + 3), heightAt(x, z - 3));
     let y = g - 1.5, w = size * (1.4 + r() * 0.6), d = size * (0.9 + r() * 0.4);
     const ry = r() * Math.PI;
     for (let k = 0; k < 3; k++) {
       const h = size * (0.5 + r() * 0.45);
-      addRotBox(x + (r() - 0.5) * size * 0.4, y + h / 2, z + (r() - 0.5) * size * 0.4, w, h, d, ry + (r() - 0.5) * 0.25, M.cliff, { size: 6, tilt: (r() - 0.5) * 0.08, rough: 0.12 });
+      addRotBox(x + (r() - 0.5) * size * 0.4, y + h / 2, z + (r() - 0.5) * size * 0.4, w, h, d, ry + (r() - 0.5) * 0.25, snowy && k === 2 ? M.cliffSnow : M.cliff, { size: 6, tilt: (r() - 0.5) * 0.08, rough: 0.12 });
       y += h * 0.92; w *= 0.62 + r() * 0.18; d *= 0.62 + r() * 0.18;
     }
     blockers.push({ x, z, r: size * 1.3 });
   }
   const CLIFFS = [[-48, -56, 7], [-30, -59, 8], [-12, -58, 6], [-58, -40, 7], [-60, -22, 6], [-59, -2, 5], [-57, 14, 5]];
   CLIFFS.forEach(([x, z, s], i) => { cliffStack(x, z, s, 300 + i); cliffStack(-x, z, s, 300 + i); });
+
+  // ---------- 雪地（地圖北邊新加的一大塊）：用自己的亂數，原本地圖的東西才不會整個換位置 ----------
+  const RS = rng(20261016);
+  // 雪地邊緣的岩壁：東西兩側 + 最北邊，頂上積雪
+  const SNOW_CLIFFS = [[-59, -66, 6], [-60, -80, 7], [-59, -94, 6], [-60, -108, 7], [-50, -119, 7], [-34, -121, 8], [-18, -120, 7]];
+  SNOW_CLIFFS.forEach(([x, z, s], i) => { cliffStack(x, z, s, 400 + i, true); cliffStack(-x, z, s, 400 + i, true); });
+  cliffStack(0, -122, 7, 420, true);
+  // 積雪的岩石：朝上的面是白的
+  const snowRockGeo = new Map();
+  function snowRock(x, z, r, seed) {
+    const key = seed % 5;
+    if (!snowRockGeo.has(key)) {
+      const geo = rockGeo(key).clone();
+      const n = geo.attributes.normal, col = [];
+      for (let i = 0; i < n.count; i++) { const k = smooth(0.3, 0.65, n.getY(i)); col.push(lerp(0.6, 0.98, k), lerp(0.6, 0.99, k), lerp(0.62, 1.0, k)); }
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      snowRockGeo.set(key, geo);
+    }
+    const g = heightAt(x, z);
+    const m = new THREE.Mesh(snowRockGeo.get(key), M.snowRock);
+    m.scale.set(r, r * 0.72, r * 0.92);
+    m.rotation.y = seed * 1.7;
+    m.position.set(x, g - r * 0.12, z);
+    m.castShadow = m.receiveShadow = true; m.userData.surf = 'stone';
+    scene.add(m); solids.push(m);
+    cyl(x, z, r * 0.82, g - 2, g + r * 0.62);
+    blockers.push({ x, z, r: r + 1.2 });
+  }
+  const SNOW_ROCKS = [[-12, -72, 2.2], [-30, -76, 3.0], [-45, -86, 2.6], [-22, -98, 3.4], [-40, -104, 2.4], [-8, -108, 2.8], [-52, -70, 2.0], [-6, -88, 1.6]];
+  SNOW_ROCKS.forEach(([x, z, r], i) => { snowRock(x, z, r, i * 7 + 5); snowRock(-x, z, r, i * 7 + 5); });
+  // 雪地的礦點比較多（跑這麼遠要有點回報）
+  const SNOW_NODES = [[-18, -80, 'sulfur'], [-36, -92, 'metal'], [-27, -110, 'sulfur'], [-48, -98, 'metal']];
+  SNOW_NODES.forEach(([x, z, k], i) => { node(x, z, k, 500 + i); node(-x, z, k, 500 + i); });
+  // 雪地營地：兩個積雪的貨櫃，旁邊有鐵桶
+  const camp = [];
+  for (const sx of [-1, 1]) {
+    const x0 = sx < 0 ? -18 : 12, x1 = sx < 0 ? -12 : 18, z0 = -95.2, z1 = -92.8;
+    const y0 = groundMin(x0, x1, z0, z1) - 0.1;
+    container(x0, x1, z0, z1, y0, sx < 0 ? '#7a2f22' : '#2f5a7a');
+    addBox([x0 - 0.05, y0 + 2.6, z0 - 0.05], [x1 + 0.05, y0 + 2.72, z1 + 0.05], M.snowCap, { surf: 'dirt', size: 3 });
+    blockers.push({ x: (x0 + x1) / 2, z: (z0 + z1) / 2, r: 4.2 });
+    camp.push([(x0 + x1) / 2, (z0 + z1) / 2]);
+  }
+  // 北極熊出沒點：雪地裡平坦、沒擋到東西的地方
+  const bearSpawns = [];
+  for (let i = 0; i < 400 && bearSpawns.length < 14; i++) {
+    const x = -48 + RS() * 96, z = -112 + RS() * 44;
+    if (snowAt(x, z) < 0.85) continue;
+    let bad = false;
+    for (const b of blockers) if (Math.hypot(x - b.x, z - b.z) < b.r + 2) { bad = true; break; }
+    if (bad || bearSpawns.some((p) => Math.hypot(p.x - x, p.z - z) < 12)) continue;
+    bearSpawns.push(new THREE.Vector3(x, heightAt(x, z), z));
+  }
 
   // 一團葉子：二十面體細分一次，每個頂點照位置亂推，邊緣才不會是完美的多面體
   function leafBlob(seed, amp = 0.22) {
@@ -821,13 +896,23 @@ export function buildWorld(scene, opts = {}) {
   // ---------- 樹（instanced；拿石頭敲可以拿木頭，敲完會倒） ----------
   // p：雲杉（深綠層層下垂）、b：樺樹（白樹幹、秋天黃橘葉）、o：櫸樹（大片綠冠）、d：枯樹
   const TREE_WOOD = 200;
-  const trees = { p: [], b: [], o: [], d: [] };
+  const trees = { p: [], b: [], o: [], d: [], s: [] };
   function blocked(x, z, pad = 0) {
     if (distRoad(x, z) < 3.4 + pad || inParking(x, z, 1 + pad)) return true;
     for (const b of blockers) if (Math.hypot(x - b.x, z - b.z) < b.r + pad) return true;
     return heightAt(x, z) < WATER_Y + 0.7;
   }
-  const plan = { p: [], b: [], o: [], d: [] };
+  const plan = { p: [], b: [], o: [], d: [], s: [] };
+  // 雪地的樹：一片一片長，中間留空地（給北極熊跟人追著跑）
+  for (let tries = 0; tries < 1200 && plan.s.length < 96; tries++) {
+    const x = -54 + RS() * 52, z = -114 + RS() * 52;
+    if (snowAt(x, z) < 0.6 || blocked(x, z, 1.5)) continue;
+    if (plan.s.some((t) => Math.hypot(t.x - x, t.z - z) < 4.2)) continue;
+    const dens = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(x * 0.11 + 1.3) * Math.cos(z * 0.09));
+    if (RS() > dens) continue;
+    const t = { x, z, s: 0.85 + RS() * 0.55, rot: RS() * 6 };
+    plan.s.push(t, { ...t, x: -x });
+  }
   const all = [];
   for (let tries = 0; tries < 1400 && all.length < 150; tries++) {
     const x = -54 + R() * 52, z = -54 + R() * 78;
@@ -948,6 +1033,35 @@ export function buildWorld(scene, opts = {}) {
       reg('d', i, t, g, [[deadTrunks, i], ...Array.from({ length: 4 }, (_, k) => [deadBranches, i * 4 + k])]);
     });
 
+    // 積雪的雲杉：每一層上半部蓋著雪
+    const snowTierGeo = (() => {
+      const geo = tierGeo.clone();
+      const pp = geo.attributes.position, col = geo.attributes.color;
+      const needle = new THREE.Color('#2a4626'), white = new THREE.Color('#f1f4f6'), cc = new THREE.Color();
+      for (let i = 0; i < pp.count; i++) {
+        const y = pp.getY(i), a = Math.atan2(pp.getZ(i), pp.getX(i));
+        const k = smooth(0.12, 0.62, y + 0.12 * Math.sin(a * 6));
+        cc.copy(needle).multiplyScalar(0.6 + 0.4 * clamp(y, 0, 1)).lerp(white, k * 0.93);
+        col.setXYZ(i, cc.r, cc.g, cc.b);
+      }
+      return geo;
+    })();
+    const snowTrunks = IM(trunkGeo, M.bark, plan.s.length), snowTiers = IM(snowTierGeo, M.snowPine, plan.s.length * TIERS);
+    plan.s.forEach((t, i) => {
+      const g = heightAt(t.x, t.z), h = 9.5 * t.s, r = 0.3 * t.s;
+      q.setFromAxisAngle(up, t.rot);
+      m4.compose(p.set(t.x, g - 0.3, t.z), q, s.set(r, h, r)); snowTrunks.setMatrixAt(i, m4);
+      for (let k = 0; k < TIERS; k++) {
+        const cr = (2.6 - k * 0.36) * t.s, ch = 2.4 * t.s;
+        q.setFromAxisAngle(up, t.rot + k * 0.9);
+        m4.compose(p.set(t.x, g + Math.max(2.6, h * 0.24) + k * 1.12 * t.s, t.z), q, s.set(cr, ch, cr));
+        snowTiers.setMatrixAt(i * TIERS + k, m4);
+        snowTiers.setColorAt(i * TIERS + k, pc.setRGB(1, 1, 1));
+      }
+      cyl(t.x, t.z, r + 0.05, g - 1, g + h);
+      reg('s', i, t, g, [[snowTrunks, i], ...Array.from({ length: TIERS }, (_, k) => [snowTiers, i * TIERS + k])]);
+    });
+
     for (const im of meshes) {
       im.castShadow = true; im.receiveShadow = true;
       im.instanceMatrix.needsUpdate = true;
@@ -955,7 +1069,7 @@ export function buildWorld(scene, opts = {}) {
       im.computeBoundingSphere();
       scene.add(im);
     }
-    for (const [im, kind] of [[pineTrunks, 'p'], [birchTrunks, 'b'], [oakTrunks, 'o'], [deadTrunks, 'd']]) {
+    for (const [im, kind] of [[pineTrunks, 'p'], [birchTrunks, 'b'], [oakTrunks, 'o'], [deadTrunks, 'd'], [snowTrunks, 's']]) {
       im.userData.surf = 'wood'; im.userData.treeKind = kind;
       solids.push(im);
     }
@@ -1389,7 +1503,7 @@ export function buildWorld(scene, opts = {}) {
     reset() { for (const n of nodeList) { nodeApi.setAlive(n, true); n.ore = NODE_ORE; } },
   };
 
-  // ---------- 箱子刷新點（生存模式）：超市一樓、屋頂、停車場、路邊 ----------
+  // ---------- 鐵桶刷新點（生存模式）：超市一樓、屋頂、停車場、路邊、雪地 ----------
   const crateSpots = [];
   {
     const fy = ZONES[2].h + 0.15, pt = fy + 3.2;
@@ -1411,8 +1525,50 @@ export function buildWorld(scene, opts = {}) {
     }
   }
 
+  for (const [cx, cz] of camp) for (const [dx, dz] of [[-4.2, 1.2], [4.4, -0.6], [0.5, 3.1]]) crateSpots.push(new THREE.Vector3(cx + dx, heightAt(cx + dx, cz + dz), cz + dz));
+  for (const [x, z] of [[2.6, -66], [-2.8, -78], [3, -88], [-2.4, -100]]) crateSpots.push(new THREE.Vector3(x, heightAt(x, z), z));
+
+  // ---------- 雪地天氣：下雪、霧變白、影子跟著人走 ----------
+  const focus = new THREE.Vector3(0, 0, 0);
+  const SNOW_N = mobile ? 700 : 1800, SNOW_BOX = 26;
+  const snowPos = new Float32Array(SNOW_N * 3);
+  for (let i = 0; i < SNOW_N; i++) { snowPos[i * 3] = (RS() - 0.5) * SNOW_BOX * 2; snowPos[i * 3 + 1] = RS() * 22; snowPos[i * 3 + 2] = (RS() - 0.5) * SNOW_BOX * 2; }
+  const snowGeo = new THREE.BufferGeometry();
+  snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+  const snowMat = new THREE.PointsMaterial({ color: '#ffffff', size: 0.11, map: T.puff, transparent: true, opacity: 0, depthWrite: false });
+  const snowfall = new THREE.Points(snowGeo, snowMat);
+  snowfall.frustumCulled = false; snowfall.visible = false; snowfall.userData.dynamic = true;
+  scene.add(snowfall);
+  const SNOW_FOG = new THREE.Color('#dce6ee');
+  let snowK = 0;
+  updaters.push((t, dt) => {
+    const want = snowAt(focus.x, focus.z);
+    snowK += (want - snowK) * (1 - Math.exp(-1.5 * dt));
+    scene.fog.color.copy(HORIZON).lerp(SNOW_FOG, snowK * 0.7);
+    scene.fog.density = FOG_D * (1 + 0.7 * snowK);
+    // 影子跟著人走（4m 一格跳，影子才不會一直閃）
+    const sx = Math.round(focus.x / 4) * 4, sz = Math.round(focus.z / 4) * 4;
+    sun.target.position.set(sx, 0, sz);
+    sun.position.set(sx, 0, sz).addScaledVector(sunDir, 120);
+    snowfall.visible = snowK > 0.02;
+    if (!snowfall.visible) return;
+    snowMat.opacity = Math.min(0.9, snowK);
+    const a = snowGeo.attributes.position.array;
+    for (let i = 0; i < SNOW_N; i++) {
+      const j = i * 3;
+      a[j + 1] -= (1.1 + (i % 7) * 0.12) * dt;
+      a[j] += Math.sin(t * 0.8 + i) * 0.35 * dt + 0.6 * dt;
+      a[j + 2] += Math.cos(t * 0.6 + i * 1.3) * 0.25 * dt;
+      if (a[j + 1] < focus.y - 3) a[j + 1] += 22;
+      if (a[j] - focus.x > SNOW_BOX) a[j] -= SNOW_BOX * 2; else if (a[j] - focus.x < -SNOW_BOX) a[j] += SNOW_BOX * 2;
+      if (a[j + 2] - focus.z > SNOW_BOX) a[j + 2] -= SNOW_BOX * 2; else if (a[j + 2] - focus.z < -SNOW_BOX) a[j + 2] += SNOW_BOX * 2;
+    }
+    snowGeo.attributes.position.needsUpdate = true;
+  });
+
   return {
-    T, colliders, solids, spawns, heightAt, raycast, sun, sunDir, env, scene, trees: treeApi, nodes: nodeApi, crateSpots,
+    T, colliders, solids, spawns, heightAt, raycast, sun, sunDir, env, scene, trees: treeApi, nodes: nodeApi, crateSpots, bearSpawns, snowAt,
+    setFocus(p) { focus.copy(p); },
     update(t, dt) { for (const u of updaters) u(t, dt); },
   };
 }

@@ -8,7 +8,7 @@ export const ICON = {
   rock: `<svg viewBox="0 0 64 18" class="ico"><path d="M20 14 L18 9 L23 4 L33 3 L42 6 L45 11 L40 15 L28 16 Z"/></svg>`,
   wall: `<svg viewBox="0 0 64 18" class="ico"><path d="M18 2 h28 v15 h-28 z M20.5 4 v11 h3 v-11 z M26 4 v11 h3 v-11 z M31.5 4 v11 h3 v-11 z M37 4 v11 h3 v-11 z M42 4 v11 h2 v-11 z" fill-rule="evenodd"/></svg>`,
   wood: `<svg viewBox="0 0 64 18" class="ico"><path d="M14 6 h30 a3.5 3.5 0 0 1 0 7 h-30 a3.5 3.5 0 0 1 0 -7z M20 8 h30 a3.5 3.5 0 0 1 0 7 h-30z" opacity=".9"/><circle cx="44" cy="9.5" r="2.2" fill="#2a2620"/></svg>`,
-  thompson: ICONS.thompson, sword: ICONS.sword, bow: ICONS.bow, grenade: ICONS.grenade,
+  thompson: ICONS.thompson, sword: ICONS.sword, bow: ICONS.bow, grenade: ICONS.grenade, bear: ICONS.bearpaw, starve: ICONS.starve,
   skull: `<svg viewBox="0 0 16 16" class="ico skull"><path d="M8 1 C3.5 1 2 4 2 7 c0 2 1 3 2 3.6 V13 h2 v-1.5 h1 V13 h2 v-1.5 h1 V13 h2 v-2.4 C13 10 14 9 14 7 14 4 12.5 1 8 1z M5.5 6 a1.4 1.4 0 1 1 0 2.8 a1.4 1.4 0 1 1 0-2.8z M10.5 6 a1.4 1.4 0 1 1 0 2.8 a1.4 1.4 0 1 1 0-2.8z"/></svg>`,
 };
 
@@ -54,6 +54,7 @@ export const hud = {
   survival(water, food) {
     $('waterBar').style.width = Math.min(100, water) + '%'; $('waterVal').textContent = Math.round(water);
     $('foodBar').style.width = Math.min(100, food / 5) + '%'; $('foodVal').textContent = Math.round(food);
+    $('foodRow').classList.toggle('low', food < 40);
   },
   // max 是 null 代表不是彈匣（箭、手雷只顯示數量）；n 是 null 就把彈藥框藏起來
   ammo(n, max, reloading, label = '5.56 步槍彈') {

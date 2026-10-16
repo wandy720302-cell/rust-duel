@@ -23,6 +23,12 @@ export const ICONS = {
   door: svg('<rect x="16" y="6" width="32" height="52" fill="#8c4f2e"/><rect x="16" y="14" width="32" height="4" fill="#3c3a36"/><rect x="16" y="44" width="32" height="4" fill="#3c3a36"/><circle cx="42" cy="32" r="3" fill="#2a2a28"/><path d="M22 6 V58 M30 6 V58 M38 6 V58" stroke="rgba(0,0,0,.25)"/>'),
   lock: svg('<rect x="18" y="8" width="28" height="48" rx="3" fill="#2e3034"/><rect x="22" y="14" width="20" height="8" fill="#1a3a22"/><circle cx="38" cy="18" r="2.5" fill="#4bd36a"/><g fill="#9aa0a6"><rect x="22" y="26" width="5" height="5"/><rect x="29.5" y="26" width="5" height="5"/><rect x="37" y="26" width="5" height="5"/><rect x="22" y="34" width="5" height="5"/><rect x="29.5" y="34" width="5" height="5"/><rect x="37" y="34" width="5" height="5"/><rect x="22" y="42" width="5" height="5"/><rect x="29.5" y="42" width="5" height="5"/><rect x="37" y="42" width="5" height="5"/></g>'),
   sbag: svg('<rect x="8" y="22" width="48" height="24" rx="10" fill="#5a6438"/><rect x="8" y="22" width="14" height="24" rx="7" fill="#8a7f5c"/><path d="M24 26 H52 M24 42 H52" stroke="#465030" stroke-width="2"/>'),
+  bear_meat: svg('<path d="M12 40 Q8 22 26 15 Q46 9 53 25 Q57 41 41 50 Q23 56 12 40 Z" fill="#b8434a"/><path d="M19 38 Q21 26 33 21" stroke="#efc9c2" stroke-width="3" fill="none"/><path d="M28 44 Q38 40 44 30" stroke="#8e2c34" stroke-width="2" fill="none"/><rect x="43" y="39" width="15" height="6" rx="3" transform="rotate(35 50 42)" fill="#ece6d6"/><circle cx="57" cy="49" r="3.6" fill="#ece6d6"/>'),
+  cooked_meat: svg('<path d="M12 40 Q8 22 26 15 Q46 9 53 25 Q57 41 41 50 Q23 56 12 40 Z" fill="#7d4524"/><path d="M16 30 L44 18 M14 38 L50 24 M20 46 L52 32" stroke="#3e1f0e" stroke-width="2.6"/><path d="M19 36 Q22 26 30 22" stroke="#b57a4a" stroke-width="2" fill="none"/><rect x="43" y="39" width="15" height="6" rx="3" transform="rotate(35 50 42)" fill="#e4dcc8"/><circle cx="57" cy="49" r="3.6" fill="#e4dcc8"/>'),
+  cloth: svg('<path d="M8 20 L48 13 L56 28 L14 35 Z" fill="#cdbb95"/><path d="M12 33 L54 26 L57 42 L15 49 Z" fill="#b6a27a"/><path d="M10 27 L52 20 M14 41 L55 34" stroke="#8f7d58" stroke-width="1.4" stroke-dasharray="3 2"/>'),
+  bandage: svg('<rect x="14" y="19" width="34" height="27" rx="4" fill="#ecebe4"/><ellipse cx="14" cy="32.5" rx="5.5" ry="13.5" fill="#d6d4ca"/><ellipse cx="14" cy="32.5" rx="2.2" ry="5.5" fill="#a6a49a"/><path d="M48 29 L60 33 L58 45 L46 41 Z" fill="#ecebe4"/><rect x="25" y="19" width="5" height="27" fill="#c43c2c" opacity=".75"/><rect x="25" y="30" width="5" height="5" fill="#ecebe4"/>'),
+  bearpaw: svg('<ellipse cx="32" cy="41" rx="14" ry="11" fill="#ebe7dc"/><circle cx="15" cy="25" r="6" fill="#ebe7dc"/><circle cx="26" cy="16" r="6" fill="#ebe7dc"/><circle cx="38" cy="16" r="6" fill="#ebe7dc"/><circle cx="49" cy="25" r="6" fill="#ebe7dc"/>'),
+  starve: svg('<circle cx="36" cy="35" r="17" fill="none" stroke="#d8d3c6" stroke-width="4"/><path d="M12 10 V26 M7 10 V20 M17 10 V20 M12 26 V54" stroke="#d8d3c6" stroke-width="3" stroke-linecap="round"/>'),
   bagdrop: svg('<path d="M14 54 Q10 30 22 22 L42 22 Q54 30 50 54 Z" fill="#7a6644"/><path d="M22 22 Q32 10 42 22" fill="none" stroke="#5a4a30" stroke-width="4"/>'),
 };
 
@@ -34,9 +40,13 @@ export const ITEMS = {
   sulfur_ore: { name: '硫磺礦', stack: 500, cat: '資源', desc: '路邊帶黃色斑點的礦石。丟進火爐燒成硫磺' },
   metal: { name: '鐵', stack: 1000, cat: '資源', desc: '鐵礦燒出來的。做刀、槍、門、鎖、手雷' },
   sulfur: { name: '硫磺', stack: 1000, cat: '資源', desc: '硫磺礦燒出來的。做手雷' },
-  rifle_body: { name: '步槍槍體', stack: 1, cat: '零件', desc: '敲破路邊或超市的箱子才有機會拿到。做 AK47 用' },
-  smg_body: { name: '衝鋒槍槍體', stack: 1, cat: '零件', desc: '敲破箱子拿到。做湯姆森衝鋒槍用' },
-  rope: { name: '繩子', stack: 20, cat: '零件', desc: '敲破箱子拿到。做弓用' },
+  rifle_body: { name: '步槍槍體', stack: 1, cat: '零件', desc: '打破路邊或超市的鐵桶才有機會拿到。做 AK47 用' },
+  smg_body: { name: '衝鋒槍槍體', stack: 1, cat: '零件', desc: '打破鐵桶拿到。做湯姆森衝鋒槍用' },
+  rope: { name: '繩子', stack: 20, cat: '零件', desc: '打破鐵桶拿到。做弓用' },
+  cloth: { name: '布', stack: 100, cat: '資源', desc: '刨北極熊的屍體拿到。做繃帶用' },
+  bear_meat: { name: '生熊肉', stack: 20, cat: '食物', hold: 'eat', desc: '刨北極熊的屍體拿到。生吃會吐，丟進火爐烤熟再吃' },
+  cooked_meat: { name: '烤熊肉', stack: 20, cat: '食物', hold: 'eat', desc: '左鍵吃掉：飢餓度 +100，慢慢回 20 血' },
+  bandage: { name: '繃帶', stack: 10, cat: '醫療', hold: 'heal', desc: '左鍵包紮：馬上回 15 血，之後再慢慢回 10' },
   rock: { name: '石頭', stack: 1, cat: '工具', hold: 'melee', desc: '開局唯一的財產。敲樹、敲礦、敲人' },
   sword: { name: '成吉思汗之刀', stack: 1, cat: '武器', hold: 'melee', desc: '彎刀，砍人很痛，採集比石頭差' },
   bow: { name: '弓', stack: 1, cat: '武器', hold: 'bow', desc: '按住拉弓、放開射出。拉滿傷害最高，需要箭' },
@@ -64,6 +74,7 @@ export const RECIPES = [
   { id: 'grenade', out: 1, time: 3, cost: { metal: 25, sulfur: 40 } },
   { id: 'door', out: 1, time: 5, cost: { wood: 150, metal: 50 } },
   { id: 'lock', out: 1, time: 4, cost: { wood: 50, metal: 100 } },
+  { id: 'bandage', out: 1, time: 2, cost: { cloth: 4 } },
 ];
 export const recipeOf = (id) => RECIPES.find((r) => r.id === id);
 
@@ -92,10 +103,16 @@ export const GUNS = {
   ak: { dmg: 30, mult: { head: 2.0, body: 1.0, legs: 0.75 }, rpm: 450, mag: 30, reload: 3.0, recoil: 1.0, hip: 1.5, adsSpread: 0.1, falloff: [60, 200, 0.7], range: 320, pieceDmg: 2 },
   thompson: { dmg: 22, mult: { head: 1.8, body: 1.0, legs: 0.75 }, rpm: 650, mag: 25, reload: 2.6, recoil: 0.55, hip: 1.9, adsSpread: 0.3, falloff: [30, 90, 0.55], range: 200, pieceDmg: 1.5 },
 };
+// meat / cloth：刨屍體一下拿多少（rust：工具越利拿越多）
 export const MELEE = {
-  rock: { dmg: 20, headMult: 1.6, swing: 0.85, hitAt: 0.3, reach: 2.4, wood: 25, ore: 30, pieceDmg: 4, crateDmg: 15 },
-  sword: { dmg: 38, headMult: 1.5, swing: 0.7, hitAt: 0.25, reach: 2.6, wood: 15, ore: 15, pieceDmg: 8, crateDmg: 25 },
+  rock: { dmg: 20, headMult: 1.6, swing: 0.85, hitAt: 0.3, reach: 2.4, wood: 25, ore: 30, pieceDmg: 4, crateDmg: 15, meat: 1, cloth: 2 },
+  sword: { dmg: 38, headMult: 1.5, swing: 0.7, hitAt: 0.25, reach: 2.6, wood: 15, ore: 15, pieceDmg: 8, crateDmg: 25, meat: 2, cloth: 3 },
 };
+// 傷害隨距離衰減：a 公尺內全額，到 b 公尺降到 m 倍
+export function falloffMult(G, dist) {
+  const [a, b, m] = G.falloff;
+  return dist <= a ? 1 : dist >= b ? m : 1 + (m - 1) * (dist - a) / (b - a);
+}
 export const BOW = { draw: 0.7, minSpeed: 22, maxSpeed: 52, dmg: 50, headMult: 2.0, gravity: 9.8, pieceDmg: 1, crateDmg: 20 };
 export const NADE = { fuse: 3.0, speed: 16, radius: 6, playerDmg: 95, pieceDmg: 150, pieceRadius: 5, crateDmg: 100 };
 
@@ -104,10 +121,23 @@ export const NODE_ORE = 300;          // 一個礦點能挖多少礦石
 export const NODE_RESPAWN = 90;       // 挖完幾秒後重生
 export const CRATE = { hp: 40, max: 7, respawn: 40 };
 export const SMELT = { fuelPerSec: 1, orePerSec: 2 };
+// 火爐裡會變成什麼、每格每秒幾個（熊肉比較慢，3 秒烤好一塊）
+export const SMELT_OUT = { metal_ore: ['metal', 2], sulfur_ore: ['sulfur', 2], bear_meat: ['cooked_meat', 1 / 3] };
+// 飢餓度（rust 的卡路里）：最多 500；歸零之後開始扣血，也不會自己回血
+export const FOOD = {
+  max: 500, spawn: [120, 170], drain: 0.18, sprintDrain: 0.18, starveDps: 0.5,
+  eat: { bear_meat: { food: 20, hp: -6, time: 1.2 }, cooked_meat: { food: 100, heal: 20, time: 1.2 } },
+};
+export const BANDAGE = { time: 2.4, hp: 15, heal: 10 };
+// 北極熊：只在雪地出沒，看到人就衝過來。打死之後可以刨肉跟布
+export const BEAR = {
+  hp: 240, dmg: 18, attackCd: 1.4, reach: 2.4, walk: 1.6, run: 6.3, aggro: 16, leash: 48,
+  max: 3, respawn: 90, meat: 10, cloth: 16, corpseLife: 180, headMult: 1.5,
+};
 export const MATCH_SECONDS = 30 * 60;
 export const REGEN = { delay: 12, perSec: 1 };
 
-// 箱子掉落：一次一樣東西
+// 鐵桶掉落：一次一樣東西
 export function rollLoot(rand = Math.random) {
   const r = rand();
   if (r < 0.17) return [{ id: 'rifle_body', n: 1 }];

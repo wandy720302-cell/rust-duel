@@ -586,3 +586,4 @@ body.touch.survival #score em { display: block; font-size: 10px; margin-top: 0; 
 /* 觸控按鈕裡的文字、圖示不接觸控：手指一定落在按鈕本身，內容換掉也不會弄丟放開的事件 */
 #touch .tbtn * { pointer-events: none; }
 .qrow.blocked em { color: #f0907a; }
+#foodRow.low .fill.food { background: #c4402a; animation: blink .8s infinite; }

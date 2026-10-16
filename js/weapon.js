@@ -293,6 +293,43 @@ export function buildGrenade() {
   return { group: g };
 }
 
+// 一塊熊肉（帶一截骨頭）；cooked：烤過的焦褐色
+export function buildMeat(cooked = false) {
+  const g = new THREE.Group();
+  const geo = new THREE.IcosahedronGeometry(1, 1);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
+    const k = 1 + 0.12 * Math.sin(x * 5 + z * 3) + 0.08 * Math.cos(y * 7);
+    p.setXYZ(i, x * k, y * k, z * k);
+  }
+  geo.computeVertexNormals();
+  const meat = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: cooked ? '#6e3b1d' : '#b3404a', roughness: cooked ? 0.75 : 0.42, flatShading: true }));
+  meat.scale.set(0.075, 0.035, 0.06);
+  const fat = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.008, 4, 12, Math.PI * 1.2), new THREE.MeshStandardMaterial({ color: cooked ? '#b98a55' : '#efd9cf', roughness: 0.6 }));
+  fat.rotation.x = Math.PI / 2; fat.position.y = 0.012;
+  const boneMat = new THREE.MeshStandardMaterial({ color: '#ece5d2', roughness: 0.5 });
+  const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.009, 0.07, 6), boneMat);
+  bone.rotation.z = Math.PI / 2; bone.position.set(0.085, 0, 0.01);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.016, 6, 5), boneMat);
+  knob.position.set(0.122, 0, 0.01);
+  g.add(meat, fat, bone, knob);
+  return { group: g };
+}
+// 一卷繃帶
+export function buildBandage() {
+  const g = new THREE.Group();
+  const white = new THREE.MeshStandardMaterial({ color: '#ecebe4', roughness: 0.9 });
+  const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.07, 14), white);
+  roll.rotation.z = Math.PI / 2;
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.072, 8), new THREE.MeshStandardMaterial({ color: '#a6a49a', roughness: 1 }));
+  core.rotation.z = Math.PI / 2;
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.004, 0.06).translate(0, -0.035, 0.03), white);
+  const cross = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.0045, 0.02).translate(0, -0.0372, 0.045), new THREE.MeshBasicMaterial({ color: '#c43c2c' }));
+  g.add(roll, core, tail, cross);
+  return { group: g };
+}
+
 export function createViewmodel(T, skin = '#c99d7a') {
   const scene = new THREE.Scene();
   const cam = new THREE.PerspectiveCamera(52, 1, 0.01, 10);
@@ -392,7 +429,17 @@ export function createViewmodel(T, skin = '#c99d7a') {
   block(planRig, 0.06, 0.03, 0.07, 0.07, -0.09, 0.02);
   limb(planRig, [0.08, -0.1, 0.04], [0.16, -0.24, 0.36], 0.06, 0.055);
 
-  const rigs = { ak: guns.ak.rig, thompson: guns.thompson.rig, rock: rockRig, sword: swordRig, bow: bowRig, grenade: nadeRig, plan: planRig, none: null };
+  // --- 熊肉（生 / 烤）、繃帶：右手拿著，用的時候拿到面前 ---
+  const handRig = (obj) => {
+    const rig = new THREE.Group(); holder.add(rig);
+    rig.add(obj);
+    block(rig, 0.07, 0.06, 0.09, 0.01, -0.04, 0.02);
+    limb(rig, [0.02, -0.05, 0.05], [0.09, -0.2, 0.36], 0.065, 0.06);
+    return rig;
+  };
+  const meatRig = handRig(buildMeat(false).group), cookedRig = handRig(buildMeat(true).group), bandageRig = handRig(buildBandage().group);
+
+  const rigs = { ak: guns.ak.rig, thompson: guns.thompson.rig, rock: rockRig, sword: swordRig, bow: bowRig, grenade: nadeRig, plan: planRig, meat: meatRig, cooked: cookedRig, bandage: bandageRig, none: null };
 
   // 開鏡時讓「照門缺口 → 準星」這條線剛好落在畫面正中央
   const POSE = {
@@ -405,13 +452,16 @@ export function createViewmodel(T, skin = '#c99d7a') {
     bow: { p: [-0.04, -0.03, -0.42], r: [0, 0.1, 0] },
     grenade: { p: [0.16, -0.15, -0.3], r: [0.1, -0.2, 0] },
     plan: { p: [0.13, -0.115, -0.3], r: [0.05, -0.25, 0] },
+    meat: { p: [0.16, -0.15, -0.3], r: [0.1, -0.3, 0] },
+    cooked: { p: [0.16, -0.15, -0.3], r: [0.1, -0.3, 0] },
+    bandage: { p: [0.15, -0.16, -0.3], r: [0.2, -0.2, 0] },
     none: { p: [0.13, -0.3, -0.3], r: [0, 0, 0] },
   };
   const ADS = { thompson: { p: [0, -guns.thompson.sightY * RIG, -0.1] } };
 
   const st = {
     kick: 0, kickRot: 0, swayX: 0, swayY: 0, phase: 0, flashT: 0, sprint: 0, down: 0, bob: 0,
-    item: 'ak', draw: 0, swing: -1, swingDur: ROCK.swing, place: -1, sight: 'iron', toss: -1,
+    item: 'ak', draw: 0, swing: -1, swingDur: ROCK.swing, place: -1, sight: 'iron', toss: -1, use: -1, useDur: 1,
   };
   const p = new THREE.Vector3(), r = new THREE.Euler(), tmp = new THREE.Vector3();
   const ease = (t) => t * t * (3 - 2 * t);
@@ -436,7 +486,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
     setItem(k) {
       if (!(k in rigs)) k = 'plan';
       if (k === st.item) return;
-      st.item = k; st.draw = 1; st.swing = -1; st.place = -1; st.toss = -1;
+      st.item = k; st.draw = 1; st.swing = -1; st.place = -1; st.toss = -1; st.use = -1;
       showRig(k);
     },
     fire() {
@@ -453,6 +503,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
     swing(dur = ROCK.swing) { st.swing = 0; st.swingDur = dur; },
     place() { st.place = 0; },
     toss() { st.toss = 0; },
+    use(dur = 1.2) { st.use = 0; st.useDur = dur; },
     // o: { dt, ads(0..1), sprint, speed, onGround, reload(-1 或 0..1), down, mdx, mdy, bowDraw(0..1), hasArrow, hasNade }
     update(o) {
       const dt = o.dt;
@@ -524,6 +575,14 @@ export function createViewmodel(T, skin = '#c99d7a') {
         nade.group.visible = st.toss < 0.5;
         if (st.toss >= 1) st.toss = -1;
       } else nade.group.visible = o.hasNade !== false;
+      // 吃東西、包紮：拿到面前，邊咬邊上下動
+      if (st.use >= 0) {
+        st.use += dt / st.useDur;
+        const k = bump(st.use, 0, 0.2, 0.85, 1);
+        p.x -= 0.12 * k; p.y += 0.07 * k; p.z += 0.08 * k; r.x += 0.35 * k; r.y += 0.6 * k;
+        p.y += Math.sin(st.use * st.useDur * 18) * 0.008 * k;
+        if (st.use >= 1) st.use = -1;
+      }
       // 放牆：藍圖往前推一下
       if (st.place >= 0) {
         st.place += dt / 0.4;

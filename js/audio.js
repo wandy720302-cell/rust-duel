@@ -173,6 +173,55 @@ export function createAudio() {
       }
     });
     buf.pop = noise(0.08, (d, sr) => { for (let i = 0; i < d.length; i++) { const t = i / sr; d[i] = Math.sin(2 * Math.PI * (500 - 2500 * t) * t) * 0.5 * Math.exp(-t * 40); } });
+    // 吃東西：咬幾口的脆聲
+    buf.eat = noise(0.95, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, ph = (t * 4.2) % 1, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.35;
+        d[i] = lp * 0.9 * Math.exp(-ph * 20) * (t < 0.9 ? 1 : 0);
+      }
+    });
+    // 繃帶：布料摩擦的沙沙聲
+    buf.bandage = noise(1.5, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.3;
+        d[i] = lp * 0.55 * (0.5 + 0.5 * Math.sin(t * 9)) * Math.min(1, t * 8) * Math.exp(-Math.max(0, t - 1.2) * 10);
+      }
+    });
+    // 北極熊衝過來前的大吼：低頻、會抖的喉音
+    buf.roar = noise(1.6, (d, sr) => {
+      let ph = 0, lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        const f = 95 + 40 * Math.sin(t * 3.1) - 30 * t + 12 * Math.sin(t * 37);
+        ph += 2 * Math.PI * f / sr;
+        lp += (n - lp) * 0.12;
+        const env = Math.min(1, t * 5) * Math.exp(-Math.max(0, t - 0.9) * 4.5);
+        d[i] = Math.tanh((Math.sin(ph) * 0.8 + Math.sin(ph * 2.03) * 0.4 + lp * 1.6 * (1 + Math.sin(ph * 0.5))) * 1.6) * 0.75 * env;
+      }
+    });
+    // 熊在附近晃的低吼
+    buf.growl = noise(1.0, (d, sr) => {
+      let ph = 0, lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        ph += 2 * Math.PI * (62 + 8 * Math.sin(t * 23)) / sr;
+        lp += (n - lp) * 0.05;
+        d[i] = (Math.sin(ph) * 0.5 + lp * 1.3) * Math.sin(Math.PI * Math.min(1, t)) * 0.75;
+      }
+    });
+    // 熊爪：揮過去的風聲 + 打中的悶響
+    buf.swipe = noise(0.45, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.2;
+        d[i] = lp * 1.3 * Math.exp(-((t - 0.12) ** 2) * 160) + Math.sin(2 * Math.PI * 80 * t) * 0.6 * (t > 0.2 ? Math.exp(-(t - 0.2) * 22) : 0);
+      }
+    });
     buf.inject = noise(0.5, (d, sr) => {
       for (let i = 0; i < d.length; i++) {
         const t = i / sr;
@@ -261,6 +310,13 @@ export function createAudio() {
       play('clack', { gain: 0.4, rate: 1.3, when: total * 0.86 });
     },
     inject() { play('inject', { gain: 0.8 }); play('click', { gain: 0.4, rate: 1.4, when: 0.05 }); },
+    eat() { play('eat', { gain: 0.7, rate: 0.95 + Math.random() * 0.1 }); },
+    bandage() { play('bandage', { gain: 0.6 }); },
+    roar(at, dist) { play('roar', { gain: 1.7, rate: 0.9 + Math.random() * 0.15, at, dist }); },
+    growl(at, dist) { play('growl', { gain: 1.1, rate: 0.85 + Math.random() * 0.2, at, dist }); },
+    swipe(at, dist) { play('swipe', { gain: 1.3, rate: 0.9 + Math.random() * 0.2, at, dist }); },
+    // 風聲大小：雪地裡風比較大
+    setWind(k) { if (windGain) windGain.gain.value = 0.05 * k; },
     chop(at, dist) { play('chop', { gain: at ? 1.2 : 0.7, rate: 0.9 + Math.random() * 0.2, at, dist }); },
     clunk(at, dist) { play('clunk', { gain: at ? 1.0 : 0.5, rate: 0.9 + Math.random() * 0.2, at, dist }); },
     whoosh(at, dist) { play('whoosh', { gain: at ? 0.8 : 0.35, rate: 0.9 + Math.random() * 0.2, at, dist }); },

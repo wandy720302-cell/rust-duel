@@ -310,7 +310,7 @@ export function createStructures(world, fx) {
       const own = m.clone();
       const mesh = new THREE.Mesh(geo, own);
       mesh.castShadow = mesh.receiveShadow = true;
-      mesh.userData = { surf: 'wood', pieceId: d.id };
+      mesh.userData = { surf: 'wood', pieceId: d.id, noHole: true };
       g.add(mesh); solids.push(mesh);
       rec.meshes.push(mesh); rec.mats.push(own);
     }
@@ -423,7 +423,7 @@ export function createStructures(world, fx) {
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.2, 0.1).translate(HOLE.w - 0.2, 1.05, 0.06), darkMat);
     for (const m of [leaf, straps, handle]) {
       m.castShadow = m.receiveShadow = true;
-      m.userData = { surf: 'metal', pieceId: rec.id };
+      m.userData = { surf: 'metal', pieceId: rec.id, noHole: true };
       hinge.add(m); solids.push(m); rec.meshes.push(m);
     }
     rec.mats.push(doorMat, darkMat);
@@ -465,7 +465,7 @@ export function createStructures(world, fx) {
     box.position.set(HOLE.w - 0.2, 1.3, 0.07);
     const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, 0.01), ledOn);
     led.position.set(HOLE.w - 0.2 + 0.03, 1.36, 0.098);
-    box.userData = { surf: 'metal', pieceId: door.id };
+    box.userData = { surf: 'metal', pieceId: door.id, noHole: true };
     door.hinge.add(box, led);
     solids.push(box); door.meshes.push(box, led);
     door.lock = { code: String(d.code), owner: d.owner, auth: new Set([d.owner]), led };

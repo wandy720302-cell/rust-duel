@@ -62,6 +62,11 @@ export function createProjectiles(world, fx, audio, scene) {
             removeAt(i);
             continue;
           }
+          if (wh && wh.mesh?.userData.bearId) {
+            hooks.onArrowHit?.(p, wh, null);
+            removeAt(i);
+            continue;
+          }
           if (wh) {
             p.pos.copy(wh.point).addScaledVector(tmpDir, 0.12);
             p.stuck = true; p.life = 8;
