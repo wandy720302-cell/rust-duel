@@ -696,13 +696,20 @@ export function createSurvival(env) {
   // ---------- 每幀 ----------
   function update(dt, now) {
     // 製作
+    // 只在做好一個（add 會通知）或卡住時通知介面，不要每幀都叫它重畫 ——
+    // 每幀重畫整個背包會把手機拖垮，按鈕也會一直被換掉而點不到
     if (sv.queue.length) {
-      for (const it of INV.tickCraft(sv.queue, dt)) {
+      const wasBlocked = !!sv.queue[0].blocked;
+      for (const it of INV.tickCraft(sv.queue, dt, (id, n) => INV.roomFor(sv.inv, id) >= n)) {
         add(it.id, it.n);
         hud.pickup(ITEMS[it.id].name, `+${it.n}`);
         audio.chime();
       }
-      changed();
+      const blocked = !!sv.queue[0]?.blocked;
+      if (blocked !== wasBlocked) {
+        if (blocked) hud.toast('背包滿了，清出空間才會繼續做', 2500);
+        changed();
+      }
     }
     // 只有房主做：火爐冶煉、礦點重生、箱子刷新
     if (host.isAuth()) {

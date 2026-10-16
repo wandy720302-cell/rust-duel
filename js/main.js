@@ -257,7 +257,8 @@ addEventListener('wheel', (e) => {
   selectItem(ITEMS[(i + (e.deltaY > 0 ? 1 : ITEMS.length - 1)) % ITEMS.length]);
 }, { passive: true });
 addEventListener('keyup', (e) => keys.delete(e.code));
-addEventListener('blur', () => { keys.clear(); firing = aiming = false; });
+addEventListener('blur', () => { keys.clear(); firing = aiming = false; touch.reset(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { keys.clear(); firing = aiming = false; touch.reset(); } });
 
 canvas.addEventListener('mousedown', (e) => {
   if (S.mode !== 'play') return;

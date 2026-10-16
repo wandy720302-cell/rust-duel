@@ -54,6 +54,21 @@ export function createTouch(root, { onTap }) {
   }
   const sprinting = () => Math.hypot(st.mx, st.my) > 0.92 && st.my < -0.7;
 
+  // 按鈕的內容沒變就不要重寫：手指壓著的元素被換掉之後，放開的 touchend 會送不到這裡，
+  // 開火鍵就會一直卡在按下（手機長按揮石頭會揮個不停就是這樣來的）
+  const setHtml = (el, html) => { if (el._html !== html) { el._html = html; el.innerHTML = html; } };
+  // 保險：每次有觸控事件就對一次帳，已經不在螢幕上的手指一律當作放開
+  function reconcile(e) {
+    if (!touches.size) return;
+    const alive = new Set([...e.touches].map((t) => t.identifier));
+    for (const [id, o] of touches) {
+      if (alive.has(id)) continue;
+      touches.delete(id);
+      if (o.kind === 'stick') resetStick();
+      else if (o.kind === 'btn') release(o.b);
+    }
+  }
+
   function press(b) {
     switch (b) {
       case 'fire': st.fireCount++; break;
@@ -79,6 +94,7 @@ export function createTouch(root, { onTap }) {
   // 只有在遊戲操作中才攔截觸控；其他時候（死亡畫面、暫停選單）讓按鈕正常點
   function onStart(e) {
     if (!st.active) return;
+    reconcile(e);
     const slot = e.target.closest?.('#hotbar .slot');
     if (slot) { e.preventDefault(); onTap?.('slot', [...slot.parentNode.children].indexOf(slot)); return; }
     e.preventDefault();
@@ -101,6 +117,7 @@ export function createTouch(root, { onTap }) {
   function onMove(e) {
     if (!st.active) return;
     e.preventDefault();
+    reconcile(e);
     for (const t of e.changedTouches) {
       const o = touches.get(t.identifier);
       if (!o) continue;
@@ -119,6 +136,7 @@ export function createTouch(root, { onTap }) {
       if (o.kind === 'stick') resetStick();
       else if (o.kind === 'btn') release(o.b);
     }
+    reconcile(e);
   }
   addEventListener('touchstart', onStart, { passive: false });
   addEventListener('touchmove', onMove, { passive: false });
@@ -142,10 +160,7 @@ export function createTouch(root, { onTap }) {
     setMode(item, kind = null) {
       const gun = item === 'ak' || item === 'thompson';
       const label = { rock: '揮', sword: '揮', plan: '放置', bow: '拉弓', grenade: '丟', none: '—' }[item] || null;
-      for (const id of ['#tFire', '#tFire2']) {
-        const b = root.querySelector(id);
-        b.innerHTML = label ? `<span>${label}</span>` : ICON_FIRE;
-      }
+      for (const id of ['#tFire', '#tFire2']) setHtml(root.querySelector(id), label ? `<span>${label}</span>` : ICON_FIRE);
       btn('aim').hidden = !gun && item !== 'bow';
       btn('reload').hidden = !gun;
       btn('scope').hidden = item !== 'ak';
@@ -158,11 +173,13 @@ export function createTouch(root, { onTap }) {
     setActive(v) {
       st.active = v;
       root.hidden = !v;
-      if (!v) {
-        touches.clear(); resetStick();
-        st.fireCount = 0; st.lookDX = st.lookDY = 0; st.jump = false;
-        syncButtons();
-      }
+      if (!v) this.reset();
+    },
+    // 全部放開（切到背景、失去焦點時用）
+    reset() {
+      touches.clear(); resetStick();
+      st.fireCount = 0; st.lookDX = st.lookDY = 0; st.jump = false;
+      syncButtons();
     },
     get active() { return st.active; },
   };

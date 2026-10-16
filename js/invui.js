@@ -20,6 +20,9 @@ const PIECE_ICON = {
   troof: '<svg viewBox="0 0 64 64"><path d="M12 46 L32 16 L52 46 Z" fill="#8f7a60"/><path d="M32 16 L26 46" stroke="#6a5844" stroke-width="2"/></svg>',
 };
 
+// 內容沒變就不要重寫 DOM：重寫會把手指 / 滑鼠底下的按鈕換掉，那一下點擊就不算了
+const setHTML = (el, html) => { if (el._html !== html) { el._html = html; el.innerHTML = html; } };
+
 export function createInvUI({ surv, audio, onClose, isTouch }) {
   const root = $('inv');
   root.innerHTML = `
@@ -55,32 +58,32 @@ export function createInvUI({ surv, audio, onClose, isTouch }) {
 
   function renderSlots() {
     const inv = surv.sv.inv;
-    $('invMain').innerHTML = inv.main.map((it, i) => slotHtml('main', i, it)).join('');
-    $('invHot').innerHTML = inv.hot.map((it, i) => slotHtml('hot', i, it, i === surv.hotIdx ? ' active' : '')).join('');
+    setHTML($('invMain'), inv.main.map((it, i) => slotHtml('main', i, it)).join(''));
+    setHTML($('invHot'), inv.hot.map((it, i) => slotHtml('hot', i, it, i === surv.hotIdx ? ' active' : '')).join(''));
   }
 
   function renderInfo() {
     const box = $('itemInfo');
     const it = ui.sel ? arrOf(ui.sel.where)?.[ui.sel.i] : null;
-    if (!it) { box.innerHTML = '<p class="dim">點一下東西看說明。手機：點一格、再點另一格就能搬過去。</p>'; return; }
+    if (!it) { setHTML(box, '<p class="dim">點一下東西看說明。手機：點一格、再點另一格就能搬過去。</p>'); return; }
     const def = ITEMS[it.id];
     const fromInv = ui.sel.where !== 'cont';
-    box.innerHTML = `<div class="infoHead">${ICONS[it.id]}<div><b>${esc(def.name)}</b>${it.n > 1 ? ` <span>×${it.n}</span>` : ''}<p>${esc(def.desc || '')}</p></div></div>
-      <div class="infoBtns">${fromInv ? `<button data-act="drop">丟在地上</button>${it.n > 1 ? '<button data-act="split">拆一半</button>' : ''}` : '<button data-act="take">拿走</button>'}</div>`;
+    setHTML(box, `<div class="infoHead">${ICONS[it.id]}<div><b>${esc(def.name)}</b>${it.n > 1 ? ` <span>×${it.n}</span>` : ''}<p>${esc(def.desc || '')}</p></div></div>
+      <div class="infoBtns">${fromInv ? `<button data-act="drop">丟在地上</button>${it.n > 1 ? '<button data-act="split">拆一半</button>' : ''}` : '<button data-act="take">拿走</button>'}</div>`);
   }
 
   function canMake(r, times = 1) { return Object.entries(r.cost).every(([id, n]) => surv.count(id) >= n * times); }
   function maxTimes(r) { return Math.max(1, Math.min(99, ...Object.entries(r.cost).map(([id, n]) => Math.floor(surv.count(id) / n)))); }
   function renderCraft() {
     const list = RECIPES.filter((r) => ui.cat === '全部' || ITEMS[r.id].cat === ui.cat);
-    $('craftList').innerHTML = list.map((r) => `<div class="crow${r.id === ui.recipe ? ' on' : ''}${canMake(r) ? '' : ' no'}" data-r="${r.id}">${ICONS[r.id]}<span>${esc(ITEMS[r.id].name)}${r.out > 1 ? ` ×${r.out}` : ''}</span><em>${r.time}s</em></div>`).join('');
+    setHTML($('craftList'), list.map((r) => `<div class="crow${r.id === ui.recipe ? ' on' : ''}${canMake(r) ? '' : ' no'}" data-r="${r.id}">${ICONS[r.id]}<span>${esc(ITEMS[r.id].name)}${r.out > 1 ? ` ×${r.out}` : ''}</span><em>${r.time}s</em></div>`).join(''));
     const r = RECIPES.find((x) => x.id === ui.recipe) || RECIPES[0];
     ui.times = Math.min(ui.times, 99);
     const ok = canMake(r, ui.times);
-    $('craftDetail').innerHTML = `<div class="infoHead">${ICONS[r.id]}<div><b>${esc(ITEMS[r.id].name)}</b><p>${esc(ITEMS[r.id].desc || '')}</p></div></div>
+    setHTML($('craftDetail'), `<div class="infoHead">${ICONS[r.id]}<div><b>${esc(ITEMS[r.id].name)}</b><p>${esc(ITEMS[r.id].desc || '')}</p></div></div>
       <table>${Object.entries(r.cost).map(([id, n]) => { const have = surv.count(id), need = n * ui.times; return `<tr class="${have >= need ? '' : 'lack'}"><td>${ICONS[id]}</td><td>${esc(ITEMS[id].name)}</td><td>${need}</td><td class="have">${have}</td></tr>`; }).join('')}</table>
       <div class="craftGo"><button data-act="minus">−</button><span>${ui.times}</span><button data-act="plus">+</button><button data-act="max">最多</button>
-      <button class="go" data-act="craft" ${ok ? '' : 'disabled'}>製作${r.out * ui.times > 1 ? ` ×${r.out * ui.times}` : ''}</button></div>`;
+      <button class="go" data-act="craft" ${ok ? '' : 'disabled'}>製作${r.out * ui.times > 1 ? ` ×${r.out * ui.times}` : ''}</button></div>`);
   }
 
   function renderCont() {
@@ -93,15 +96,15 @@ export function createInvUI({ surv, audio, onClose, isTouch }) {
     $('contTitle').textContent = isFurn ? '火爐' : c.kind === 'bag' ? '掉落的背包' : '地上的東西';
     if (isFurn) {
       const s = (j, label) => `<div class="fslot"><small>${label}</small>${slotHtml('cont', j, c.slots[j])}</div>`;
-      $('contBody').innerHTML = `<div class="furnace">
+      setHTML($('contBody'), `<div class="furnace">
         <div class="frow">${s(0, '燃料（木頭）')}</div>
         <div class="frow">${s(1, '礦石')}${s(2, '礦石')}</div>
         <div class="fstate ${c.on ? 'on' : ''}">${c.on ? '🔥 燒煉中' : '熄火'}</div>
-        <div class="frow">${s(3, '成品')}${s(4, '成品')}${s(5, '成品')}</div></div>`;
-      $('contBtns').innerHTML = `<button data-act="toggle" class="${c.on ? '' : 'go'}">${c.on ? '熄火' : '點火'}</button><button data-act="takeall">全部拿走</button>`;
+        <div class="frow">${s(3, '成品')}${s(4, '成品')}${s(5, '成品')}</div></div>`);
+      setHTML($('contBtns'), `<button data-act="toggle" class="${c.on ? '' : 'go'}">${c.on ? '熄火' : '點火'}</button><button data-act="takeall">全部拿走</button>`);
     } else {
-      $('contBody').innerHTML = `<div class="islots cont">${c.slots.map((it, j) => slotHtml('cont', j, it)).join('')}</div>`;
-      $('contBtns').innerHTML = '<button data-act="takeall" class="go">全部拿走</button>';
+      setHTML($('contBody'), `<div class="islots cont">${c.slots.map((it, j) => slotHtml('cont', j, it)).join('')}</div>`);
+      setHTML($('contBtns'), '<button data-act="takeall" class="go">全部拿走</button>');
     }
   }
 
@@ -209,8 +212,8 @@ export function createInvUI({ surv, audio, onClose, isTouch }) {
   function renderQueue() {
     const q = surv.sv.queue;
     const box = $('craftQueue');
-    if (!q.length) { box.innerHTML = ''; return; }
-    box.innerHTML = q.map((x, i) => `<div class="qrow" data-q="${i}" title="點一下取消">${ICONS[x.id]}<span>${esc(ITEMS[x.id].name)}${x.count > 1 ? ` ×${x.count}` : ''}</span><em>${Math.ceil(x.left)}s</em></div>`).join('');
+    if (!q.length) { setHTML(box, ''); return; }
+    setHTML(box, q.map((x, i) => `<div class="qrow${x.blocked ? ' blocked' : ''}" data-q="${i}" title="點一下取消">${ICONS[x.id]}<span>${esc(ITEMS[x.id].name)}${x.count > 1 ? ` ×${x.count}` : ''}</span><em>${x.blocked ? '背包滿' : `${Math.ceil(x.left)}s`}</em></div>`).join(''));
   }
   $('craftQueue').addEventListener('click', (e) => {
     const row = e.target.closest('[data-q]');
@@ -221,8 +224,8 @@ export function createInvUI({ surv, audio, onClose, isTouch }) {
   // ---------- 快捷欄（HUD 上的那排） ----------
   function renderHotbar() {
     const inv = surv.sv.inv;
-    $('hotbar').innerHTML = inv.hot.map((it, i) => `<div class="slot${i === surv.hotIdx ? ' active' : ''}${it ? '' : ' emptySlot'}" data-hot="${i}">
-      <span class="key">${i + 1}</span>${it ? ICONS[it.id] : ''}<span class="qty">${it ? (it.d?.mag !== undefined ? it.d.mag : it.n > 1 ? it.n : '') : ''}</span></div>`).join('');
+    setHTML($('hotbar'), inv.hot.map((it, i) => `<div class="slot${i === surv.hotIdx ? ' active' : ''}${it ? '' : ' emptySlot'}" data-hot="${i}">
+      <span class="key">${i + 1}</span>${it ? ICONS[it.id] : ''}<span class="qty">${it ? (it.d?.mag !== undefined ? it.d.mag : it.n > 1 ? it.n : '') : ''}</span></div>`).join(''));
   }
   surv.onChange(renderHotbar);
 

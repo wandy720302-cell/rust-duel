@@ -48,6 +48,17 @@ export function add(inv, id, n, d = null) {
   return left;
 }
 
+// 背包（快捷欄 + 背包）還放得下幾個
+export function roomFor(inv, id) {
+  const st = stackOf(id);
+  let n = 0;
+  for (const arr of [inv.hot, inv.main]) for (const s of arr) {
+    if (!s) n += st;
+    else if (st > 1 && s.id === id) n += st - s.n;
+  }
+  return n;
+}
+
 export function count(inv, id) {
   let n = 0;
   for (const arr of [inv.hot, inv.main]) for (const s of arr) if (s && s.id === id) n += s.n;
@@ -173,7 +184,9 @@ export function startCraft(inv, queue, recipe, times = 1) {
   queue.push({ id: recipe.id, out: recipe.out, left: recipe.time, total: recipe.time, count: times, cost: recipe.cost });
   return true;
 }
-export function tickCraft(queue, dt) {
+// canFit(id, n)：有給的話，放不下就停在「做好了」那一步等（q.blocked），不會一直往地上丟；
+// 而且一次最多完成一個，讓呼叫的人先放進背包再判斷下一個
+export function tickCraft(queue, dt, canFit = null) {
   const done = [];
   let t = dt;
   while (queue.length && t > 0) {
@@ -181,9 +194,13 @@ export function tickCraft(queue, dt) {
     const step = Math.min(t, q.left);
     q.left -= step; t -= step;
     if (q.left <= 1e-6) {
+      q.left = 0;
+      if (canFit && !canFit(q.id, q.out)) { q.blocked = true; break; }
+      q.blocked = false;
       done.push({ id: q.id, n: q.out });
       q.count -= 1;
       if (q.count <= 0) queue.shift(); else q.left = q.total;
+      if (canFit) break;
     }
   }
   return done;
