@@ -87,9 +87,35 @@ export function createEffects(scene, T) {
       light.intensity = 6;
       lightT = 0.05;
     },
+    // 手雷爆炸：火球 + 一圈煙 + 飛散的土塊 + 一瞬間的強光
+    explosion(pos) {
+      const fire = new THREE.SpriteMaterial({ map: T.puff, color: '#ffb050', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
+      sprite(fire, pos.clone().add(new THREE.Vector3(0, 0.6, 0)), 1.6, 0.35, new THREE.Vector3(0, 1, 0), 2.2);
+      sprite(fire, pos.clone().add(new THREE.Vector3(0, 1.0, 0)), 1.0, 0.25, new THREE.Vector3(0, 3, 0), 3);
+      for (let i = 0; i < 9; i++) {
+        const v = new THREE.Vector3((Math.random() - 0.5) * 3, 1 + Math.random() * 2.5, (Math.random() - 0.5) * 3);
+        const c = ['#3a3632', '#55504a', '#6b655c'][i % 3];
+        sprite(puffMat(c), pos.clone().add(new THREE.Vector3((Math.random() - 0.5), 0.4 + Math.random() * 0.6, (Math.random() - 0.5))), 1.2 + Math.random(), 1.8 + Math.random() * 1.2, v, 2.5);
+      }
+      for (let i = 0; i < 14; i++) {
+        const ch = new THREE.Mesh(chipGeo, chipMat(SURF_COLOR.dirt));
+        ch.position.copy(pos).add(new THREE.Vector3(0, 0.2, 0));
+        ch.scale.setScalar(2 + Math.random() * 2);
+        scene.add(ch);
+        const v = new THREE.Vector3((Math.random() - 0.5) * 12, 4 + Math.random() * 6, (Math.random() - 0.5) * 12);
+        items.push({ obj: ch, life: 1.3, max: 1.3, vel: v, grav: true, spin: true });
+      }
+      for (let i = 0; i < 10; i++) {
+        const v = new THREE.Vector3((Math.random() - 0.5) * 16, Math.random() * 10, (Math.random() - 0.5) * 16);
+        sprite(sparkMat, pos.clone().add(new THREE.Vector3(0, 0.4, 0)), 0.12, 0.3 + Math.random() * 0.3, v, 0.3);
+      }
+      light.position.copy(pos).add(new THREE.Vector3(0, 1.2, 0));
+      light.intensity = 60; light.distance = 30;
+      lightT = 0.12;
+    },
     clearHoles() { for (const h of holes) scene.remove(h); holes.length = 0; },
     update(dt) {
-      if (lightT > 0) { lightT -= dt; if (lightT <= 0) light.intensity = 0; }
+      if (lightT > 0) { lightT -= dt; if (lightT <= 0) { light.intensity = 0; light.distance = 9; } }
       for (let i = items.length - 1; i >= 0; i--) {
         const it = items[i];
         if (it.tracer) {

@@ -1,4 +1,5 @@
 // rust 風格 HUD：右下狀態條、底部快捷欄、頂部羅盤、右上擊殺通知
+import { ICONS } from './items.js';
 const $ = (id) => document.getElementById(id);
 
 export const ICON = {
@@ -7,6 +8,7 @@ export const ICON = {
   rock: `<svg viewBox="0 0 64 18" class="ico"><path d="M20 14 L18 9 L23 4 L33 3 L42 6 L45 11 L40 15 L28 16 Z"/></svg>`,
   wall: `<svg viewBox="0 0 64 18" class="ico"><path d="M18 2 h28 v15 h-28 z M20.5 4 v11 h3 v-11 z M26 4 v11 h3 v-11 z M31.5 4 v11 h3 v-11 z M37 4 v11 h3 v-11 z M42 4 v11 h2 v-11 z" fill-rule="evenodd"/></svg>`,
   wood: `<svg viewBox="0 0 64 18" class="ico"><path d="M14 6 h30 a3.5 3.5 0 0 1 0 7 h-30 a3.5 3.5 0 0 1 0 -7z M20 8 h30 a3.5 3.5 0 0 1 0 7 h-30z" opacity=".9"/><circle cx="44" cy="9.5" r="2.2" fill="#2a2620"/></svg>`,
+  thompson: ICONS.thompson, sword: ICONS.sword, bow: ICONS.bow, grenade: ICONS.grenade,
   skull: `<svg viewBox="0 0 16 16" class="ico skull"><path d="M8 1 C3.5 1 2 4 2 7 c0 2 1 3 2 3.6 V13 h2 v-1.5 h1 V13 h2 v-1.5 h1 V13 h2 v-2.4 C13 10 14 9 14 7 14 4 12.5 1 8 1z M5.5 6 a1.4 1.4 0 1 1 0 2.8 a1.4 1.4 0 1 1 0-2.8z M10.5 6 a1.4 1.4 0 1 1 0 2.8 a1.4 1.4 0 1 1 0-2.8z"/></svg>`,
 };
 
@@ -53,20 +55,33 @@ export const hud = {
     $('waterBar').style.width = Math.min(100, water) + '%'; $('waterVal').textContent = Math.round(water);
     $('foodBar').style.width = Math.min(100, food / 5) + '%'; $('foodVal').textContent = Math.round(food);
   },
-  ammo(n, max, reloading) {
-    const s = `${n}|${reloading}`;
+  // max 是 null 代表不是彈匣（箭、手雷只顯示數量）；n 是 null 就把彈藥框藏起來
+  ammo(n, max, reloading, label = '5.56 步槍彈') {
+    const s = `${n}|${max}|${reloading}|${label}`;
     if (s === lastAmmo) return;
     lastAmmo = s;
+    $('ammoBox').hidden = n === null;
+    if (n === null) return;
     $('ammoNow').textContent = n;
-    $('ammoMax').textContent = `/ ${max}`;
+    $('ammoMax').textContent = max === null ? '' : `/ ${max}`;
+    $('ammoBox').querySelector('small').textContent = label;
     $('ammoBox').classList.toggle('empty', n === 0);
-    document.querySelector('#slotAk .qty').textContent = n;
+    const q = document.querySelector('#slotAk .qty');
+    if (q) q.textContent = n;
   },
-  syringes(n) { document.querySelector('#slotSyr .qty').textContent = n ? `×${n}` : ''; $('slotSyr').classList.toggle('used', !n); },
-  score(me, opp, meName, oppName, target) {
-    $('score').innerHTML = target
-      ? `<span class="me">${esc(meName)}</span><b>${me}</b><i>:</i><b>${opp}</b><span class="op">${esc(oppName)}</span><em>先 ${target} 殺獲勝</em>`
-      : `<span class="me">${esc(meName)}</span><b>${me}</b><em>練習模式：稻草人擊殺數</em>`;
+  syringes(n) { const q = document.querySelector('#slotSyr .qty'); if (!q) return; q.textContent = n ? `×${n}` : ''; $('slotSyr').classList.toggle('used', !n); },
+  // sub：比分下面那行小字（生存模式放倒數計時）
+  score(me, opp, meName, oppName, target, sub = null) {
+    const note = sub ?? (target ? `先 ${target} 殺獲勝` : '練習模式：稻草人擊殺數');
+    $('score').innerHTML = target || sub
+      ? `<span class="me">${esc(meName)}</span><b>${me}</b>${oppName ? `<i>:</i><b>${opp}</b><span class="op">${esc(oppName)}</span>` : ''}<em>${esc(note)}</em>`
+      : `<span class="me">${esc(meName)}</span><b>${me}</b><em>${esc(note)}</em>`;
+  },
+  interact(text) {
+    const el = $('interact');
+    if (!text) { el.hidden = true; return; }
+    el.hidden = false;
+    if (el.dataset.t !== text) { el.dataset.t = text; el.innerHTML = `<kbd>E</kbd> ${esc(text)}`; }
   },
   compass(yaw) {
     const heading = ((-yaw * 180 / Math.PI) % 360 + 360) % 360;
@@ -109,13 +124,14 @@ export const hud = {
     $('cross').style.setProperty('--gap', spreadPx + 'px');
     $('cross').classList.toggle('ads', ads > 0.6);
   },
-  sight(short) { $('slotAk').dataset.sight = short; },
+  sight(short) { const el = $('slotAk'); if (el) el.dataset.sight = short; },
   scope(on) { $('scopeOverlay').classList.toggle('on', on); },
   // 快捷欄：0=AK 2=石頭 3=木牆
   activeSlot(i) {
     document.querySelectorAll('#hotbar .slot').forEach((el, k) => el.classList.toggle('active', k === i));
   },
   wood(n, cost) {
+    if (!$('slotWood')) return;
     document.querySelector('#slotWood .qty').textContent = n;
     document.querySelector('#slotWall .qty').textContent = cost;
     $('slotWall').classList.toggle('used', n < cost);

@@ -1,6 +1,6 @@
 // 對手的身體：rust 經典「只穿一條內褲拿 AK 的裸男」
 import * as THREE from 'three';
-import { buildAK, buildRock, buildPlan, ROCK } from './weapon.js';
+import { buildAK, buildRock, buildPlan, buildThompson, buildSword, buildBow, buildGrenade, ROCK } from './weapon.js';
 
 export const SKINS = [
   { skin: '#d2a67f', shorts: '#2a3f6b', hair: '#3b2a1c' },
@@ -58,8 +58,28 @@ export function createAvatar(scene, look, T) {
   plan.position.set(0.1, -0.1, -0.42);
   plan.rotation.x = -0.9;
   aim.add(plan);
-  const items = { ak, rock, plan };
-  const showItem = (k) => { for (const [name, o] of Object.entries(items)) o.visible = name === k; };
+  // 生存模式的武器
+  const th = buildThompson();
+  th.group.position.set(0.1, -0.06, -0.36);
+  aim.add(th.group);
+  const sword = buildSword();
+  sword.group.position.set(0.22, -0.06, -0.36);
+  sword.group.rotation.x = 0.5;
+  aim.add(sword.group);
+  const bow = buildBow();
+  bow.group.position.set(0.0, -0.02, -0.5);
+  bow.group.rotation.z = -0.25;
+  bow.group.scale.setScalar(1.1);
+  aim.add(bow.group);
+  const nade = buildGrenade();
+  nade.group.position.set(0.22, -0.05, -0.4);
+  nade.group.scale.setScalar(1.3);
+  aim.add(nade.group);
+  const items = { ak, rock, plan, thompson: th.group, sword: sword.group, bow: bow.group, grenade: nade.group, none: null };
+  const showItem = (k) => {
+    if (!(k in items)) k = 'plan';
+    for (const [name, o] of Object.entries(items)) if (o) o.visible = name === k;
+  };
   showItem('ak');
   const armR = box(0.1, 0.1, 0.4, skin, aim, 0.2, -0.08, -0.16); armR.rotation.y = 0.18;
   const armL = box(0.1, 0.1, 0.55, skin, aim, -0.04, -0.09, -0.32); armL.rotation.y = -0.55;
@@ -70,10 +90,12 @@ export function createAvatar(scene, look, T) {
   flash.scale.set(0.5, 0.5, 1);
   flash.visible = false;
   muzzle.add(flash);
+  const flash2 = flash.clone(); flash2.material = flash.material;
+  th.muzzle.add(flash2);
 
   scene.add(root);
 
-  const st = { phase: 0, dead: 0, flashT: 0, crouch: 0, alive: true, stepAcc: 0, item: 'ak', swing: -1 };
+  const st = { phase: 0, dead: 0, flashT: 0, crouch: 0, alive: true, stepAcc: 0, item: 'ak', swing: -1, swingDur: ROCK.swing, draw: 0 };
   const inv = new THREE.Matrix4();
   const lo = new THREE.Vector3(), ld = new THREE.Vector3();
 
@@ -104,11 +126,12 @@ export function createAvatar(scene, look, T) {
       if (s.sight && s.sight !== st.sight) { st.sight = s.sight; setAkSight(s.sight); }
       // 揮石頭：手臂整組往上抬再往下砸
       if (st.swing >= 0) {
-        st.swing += dt / ROCK.swing;
+        st.swing += dt / st.swingDur;
         const q = st.swing;
         aim.rotation.x += q < 0.3 ? 0.9 * (q / 0.3) : q < 0.45 ? 0.9 - 2.0 * ((q - 0.3) / 0.15) : -1.1 * (1 - (q - 0.45) / 0.55);
         if (q >= 1) st.swing = -1;
       }
+      if (st.item === 'bow') bow.setDraw(s.draw || 0, (s.draw || 0) > 0.05);
       head.rotation.x = s.pitch * 0.6;
       const c = s.crouch;
       upper.position.y = 0.88 - 0.45 * c;
@@ -124,14 +147,15 @@ export function createAvatar(scene, look, T) {
       const e = st.dead * st.dead;
       body.rotation.x = e * Math.PI / 2 * 0.98;
       body.position.y = e * 0.15;
-      if (st.flashT > 0) { st.flashT -= dt; if (st.flashT <= 0) flash.visible = false; }
+      if (st.flashT > 0) { st.flashT -= dt; if (st.flashT <= 0) flash.visible = flash2.visible = false; }
     },
-    swing() { st.swing = 0; },
+    swing(dur = ROCK.swing) { st.swing = 0; st.swingDur = dur; },
     flash() {
-      st.flashT = 0.05; flash.visible = true;
+      st.flashT = 0.05; (st.item === 'thompson' ? flash2 : flash).visible = true;
       flash.material.rotation = Math.random() * 6.28;
     },
-    muzzleWorld(out) { root.updateMatrixWorld(true); return muzzle.getWorldPosition(out); },
+    muzzleWorld(out) { root.updateMatrixWorld(true); return (st.item === 'thompson' ? th.muzzle : muzzle).getWorldPosition(out); },
+    handWorld(out) { root.updateMatrixWorld(true); return nade.group.getWorldPosition(out); },
     // 命中判定：射線轉進角色本地座標，對三個 AABB（頭/身/腿）做 slab test
     rayHit(origin, dir, maxDist = Infinity) {
       if (!st.alive || !root.visible) return null;

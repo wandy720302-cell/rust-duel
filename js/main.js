@@ -10,6 +10,11 @@ import { createNet, makeRoomCode, errText, hasTurn } from './net.js';
 import { initHud, hud, ICON } from './hud.js';
 import { createTouch, isTouchDevice } from './touch.js';
 import { createPost } from './post.js';
+import { createStructures } from './structures.js';
+import { createProjectiles } from './projectiles.js';
+import { createSurvival } from './survival.js';
+import { createInvUI } from './invui.js';
+import { GUNS, MELEE, BOW, REGEN, PIECES, ITEMS as ITEM_DEFS } from './items.js';
 
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -19,12 +24,17 @@ const v3 = (v) => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
 const toV = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
 const KILLS_TO_WIN = 5;
+const REGEN_DELAY = REGEN.delay * 1000, REGEN_RATE = REGEN.perSec;
+const PIECE_NAME = Object.fromEntries(Object.entries(PIECES).map(([k, v]) => [k, v.name]));
+const COSTS = Object.fromEntries(Object.entries(PIECES).map(([k, v]) => [k, v.cost]));
+const ITEM_NAME = Object.fromEntries(Object.entries(ITEM_DEFS).map(([k, v]) => [k, v.name]));
 const SEND_HZ = 20;
 const INTERP_MS = 110;     // 對手畫面延遲這麼多來做內插，換取不抖
 const BAG_CD = 6, BEACH_CD = 3;
 const SYRINGE_TIME = 1.3;
 const TOUCH = isTouchDevice();   // 手機/平板：觸控操作 + 降畫質 + 輔助瞄準
 document.body.classList.toggle('touch', TOUCH);
+const OPEN_INV = TOUCH ? '按左上的「背包」' : '按 Tab 打開背包';
 
 // ---------- 設定 ----------
 const settings = { sens: 1, fov: 80, vol: 0.8, post: !TOUCH };
@@ -58,6 +68,8 @@ const post = createPost(renderer, scene, camera, vm.scene, vm.cam);
 const applyPost = () => document.body.classList.toggle('post', !!settings.post);
 applyPost();
 const builder = createBuilder(world, fx);
+const structs = createStructures(world, fx);
+const proj = createProjectiles(world, fx, audio, scene);
 const ITEMS = ['ak', 'rock', 'plan'];
 initHud();
 if (TOUCH) {
@@ -88,6 +100,7 @@ const S = {
   matchOver: false, wantRematch: false, oppWantRematch: false,
   deathAt: 0, sendAcc: 0, pingAcc: 0, mdx: 0, mdy: 0,
   item: 'ak', sight: 'iron', scoped: false, wood: 0, swingT: -1, swingCd: 0, wasFiring: false, wallN: 0, lookAt: 0, build: null,
+  gameMode: 'duel', uiOpen: false, oppKills: 0, bowDraw: 0, tossT: -1, tossCd: 0, shake: 0, swingWith: 'rock', reloadTotal: AK.reload, scoreAt: 0,
 };
 const opp = {
   avatar: null, snaps: [], prevPos: new THREE.Vector3(), stepAcc: 0,
@@ -95,6 +108,68 @@ const opp = {
 };
 let dummy = null;
 let net = null;
+
+// ---------- 生存模式 ----------
+const survHost = {
+  send: (m) => { if (S.online) net?.send(m); },
+  isAuth: () => !S.online || net?.role === 'host',
+  me: () => S.side,
+  feet: () => S.body.pos,
+  eye: () => camera.position,
+  aimDir: () => new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(S.pitch, S.yaw, 0, 'YXZ')),
+  forwardFlat: () => new THREE.Vector3(-Math.sin(S.yaw), 0, -Math.cos(S.yaw)),
+  yaw: () => S.yaw,
+  velocity: () => new THREE.Vector3(S.body.vel.x, S.body.vel.y, S.body.vel.z),
+  alive: () => S.alive,
+  players() { const a = [S.body.pos]; if (S.online && opp.snaps.length && opp.cur.alive) a.push(opp.cur.pos); return a; },
+  playersNear(p, r) { return survHost.players().some((q) => q.distanceTo(p) < r); },
+  opponent: () => (S.online && opp.snaps.length ? { pos: opp.cur.pos, alive: opp.cur.alive } : null),
+  damageSelf: (dmg, from, w) => onHit({ dmg, part: 'body', from: v3(from), w, self: true }),
+  damageOpponent: (dmg, part, from, w) => { if (S.online) net.send({ t: 'hit', dmg, part, from: v3(from), w }); hud.hitmarker(false); },
+  sendTreeHit: (tree, got, dir) => { if (S.online) net.send({ t: 'thit', k: tree.kind, i: tree.i, a: got, dx: +dir.x.toFixed(2), dz: +dir.z.toFixed(2) }); },
+  openInventory: (open) => (open ? openInv() : closeInv()),
+  keypad: (title, cb) => { S.uiOpen = true; releaseControl(); invui.openKeypad(title, cb); },
+  shake: (k) => { S.shake = Math.max(S.shake, k); },
+};
+const surv = createSurvival({ world, scene, fx, audio, hud, structs, proj, host: survHost });
+const invui = createInvUI({ surv, audio, isTouch: TOUCH, onClose: (resume) => closeInv(resume !== false) });
+surv.onChange(() => { if (S.gameMode === 'survival') syncHeld(); });
+
+function openInv() {
+  if (S.gameMode !== 'survival' || !S.alive || S.matchOver) return;
+  S.uiOpen = true;
+  releaseControl();
+  invui.open();
+}
+// 關掉背包 / 鍵盤 / 建築選單。從點擊或按鍵關的就直接回到遊戲，不然跳出「點一下開始」
+function closeInv(resume = true) {
+  invui.closeAll();
+  S.uiOpen = false;
+  if (S.mode !== 'play' || !S.alive || S.matchOver) return;
+  if (resume) resumeControl(); else $('clickToPlay').hidden = false;
+}
+function openBuildMenu() { S.uiOpen = true; releaseControl(); invui.openBuildMenu(); }
+
+// 手上拿的東西變了（換格子、用完、撿到）就重設動作、換模型
+let heldKey = '';
+function syncHeld() {
+  const it = surv.held();
+  const look = surv.holdLook(), kind = surv.holdKind();
+  const k = `${surv.hotIdx}|${it ? it.id : ''}`;
+  if (k !== heldKey) {
+    heldKey = k;
+    S.reload = -1; S.swingT = -1; S.bowDraw = 0; S.tossT = -1;
+    if (kind !== 'gun' && kind !== 'bow') aiming = false;
+    vm.setItem(look);
+    S.item = look;
+    S.swingCd = 0.35; S.fireCd = Math.max(S.fireCd, 0.3);
+    if (kind === 'gun') S.ammo = it.d?.mag ?? GUNS[it.id].mag;
+    if (kind !== 'build' && kind !== 'deploy') surv.hidePreview();
+  }
+  touch.setMode(look, kind);
+  invui.renderHotbar();
+}
+const selectHot = (i) => { if (S.alive) surv.selectHot(i); };
 
 // ---------- 輸入 ----------
 const keys = new Set();
@@ -106,7 +181,11 @@ const inputActive = () => (TOUCH ? touch.active : locked());
 const touch = createTouch($('touch'), {
   onTap(b, idx) {
     if (b === 'reload') startReload();
-    else if (b === 'slot') selectSlot(idx);
+    else if (b === 'slot') { if (S.gameMode === 'survival') selectHot(idx); else selectSlot(idx); }
+    else if (b === 'inv') { if (S.uiOpen) closeInv(); else openInv(); }
+    else if (b === 'use') surv.interact();
+    else if (b === 'pick') openBuildMenu();
+    else if (b === 'rot') surv.rotate();
     else if (b === 'scope') cycleSight();
     else if (b === 'pause') { releaseControl(); showPause(); }
   },
@@ -134,6 +213,8 @@ function releaseControl() {
 }
 
 function requestLock() {
+  // 瀏覽器拒絕鎖滑鼠（例如剛按過 Esc）時，退回「點一下開始」
+  setTimeout(() => { if (!locked() && S.mode === 'play' && S.alive && !S.uiOpen && !S.matchOver && $('pause').hidden) $('clickToPlay').hidden = false; }, 400);
   try {
     const p = canvas.requestPointerLock({ unadjustedMovement: true });
     if (p?.catch) p.catch(() => { try { canvas.requestPointerLock(); } catch { /* 太快重鎖會被瀏覽器拒絕 */ } });
@@ -147,15 +228,31 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (S.mode !== 'play') return;
   if (['Space', 'KeyC', 'Tab'].includes(e.code)) e.preventDefault();
+  if (S.gameMode === 'survival') {
+    if (e.code === 'Tab') { if (invui.isOpen) closeInv(); else if (locked()) openInv(); return; }
+    if (e.code === 'Escape' && S.uiOpen) { closeInv(false); return; }
+    if (!locked()) return;
+    survivalKey(e);
+    return;
+  }
   if (!locked()) return;
   if (e.code === 'KeyR') startReload();
   if (e.code === 'KeyV') cycleSight();
   const slot = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4 }[e.code];
   if (slot !== undefined) selectSlot(slot);
 });
-// 滾輪在 AK / 石頭 / 木牆之間輪流切
+function survivalKey(e) {
+  const slot = { Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Digit5: 4, Digit6: 5 }[e.code];
+  if (slot !== undefined) { selectHot(slot); return; }
+  const kind = surv.holdKind();
+  if (e.code === 'KeyE') surv.interact();
+  else if (e.code === 'KeyR') { if (kind === 'gun') startReload(); else if (kind === 'build' || kind === 'deploy') surv.rotate(); }
+  else if (e.code === 'KeyV' && surv.held()?.id === 'ak') cycleSight();
+}
+// 滾輪在 AK / 石頭 / 木牆之間輪流切（生存模式：快捷欄 1~6 輪流）
 addEventListener('wheel', (e) => {
   if (S.mode !== 'play' || !locked() || !S.alive) return;
+  if (S.gameMode === 'survival') { selectHot((surv.hotIdx + (e.deltaY > 0 ? 1 : 5)) % 6); return; }
   const i = ITEMS.indexOf(S.item);
   selectItem(ITEMS[(i + (e.deltaY > 0 ? 1 : ITEMS.length - 1)) % ITEMS.length]);
 }, { passive: true });
@@ -166,12 +263,15 @@ canvas.addEventListener('mousedown', (e) => {
   if (S.mode !== 'play') return;
   if (!locked()) return;
   if (e.button === 0) firing = true;
-  if (e.button === 2) aiming = true;
+  if (e.button === 2) {
+    if (S.gameMode === 'survival' && surv.holdKind() === 'build') { openBuildMenu(); return; }
+    aiming = true;
+  }
 });
 addEventListener('mouseup', (e) => { if (e.button === 0) firing = false; if (e.button === 2) aiming = false; });
 addEventListener('contextmenu', (e) => { if (S.mode === 'play') e.preventDefault(); });
 addEventListener('mousemove', (e) => {
-  if (!locked() || !S.alive) return;
+  if (!locked() || !S.alive || S.uiOpen) return;   // 開著背包、鍵盤時不轉視角
   if (Math.abs(e.movementX) > 500 || Math.abs(e.movementY) > 500) return; // Chrome 偶爾吐出的瞬移值
   const k = 0.0022 * settings.sens * (camera.fov / settings.fov);
   S.yaw -= e.movementX * k;
@@ -184,7 +284,7 @@ document.addEventListener('pointerlockchange', () => {
     $('pause').hidden = true; $('clickToPlay').hidden = true;
   } else {
     firing = aiming = false;
-    if (S.mode === 'play' && S.alive && !S.matchOver) showPause();
+    if (S.mode === 'play' && S.alive && !S.matchOver && !S.uiOpen) showPause();
   }
 });
 $('clickToPlay').addEventListener('click', () => resumeControl());
@@ -207,7 +307,15 @@ function showPause() { $('pause').hidden = false; }
 $('btnResume').addEventListener('click', () => resumeControl());
 $('btnLeave').addEventListener('click', leave);
 // 遊戲說明：大廳和暫停選單都打得開；點背景、按 ✕ 或 Esc 關掉
-function openGuide() { $('guide').hidden = false; $('guide').querySelector('.guideBody').scrollTop = 0; }
+function guideTab(g) {
+  $('guideTabs').querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === g));
+  $('guide').querySelectorAll('.guideBody [data-g]').forEach((el) => { el.hidden = el.dataset.g !== g; });
+}
+$('guideTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) guideTab(b.dataset.tab); });
+function openGuide() {
+  guideTab((S.mode === 'play' ? S.gameMode : lobbyMode) === 'survival' ? 'surv' : 'duel');
+  $('guide').hidden = false; $('guide').querySelector('.guideBody').scrollTop = 0;
+}
 function closeGuide() { $('guide').hidden = true; }
 $('btnGuide').addEventListener('click', openGuide);
 $('btnGuide2').addEventListener('click', openGuide);
@@ -231,6 +339,18 @@ function readName() {
   S.myName = nameInput.value.trim().slice(0, 14) || '無名裸男';
   try { localStorage.setItem('rustduel.name', S.myName); } catch { /* ignore */ }
 }
+let lobbyMode = 'duel';
+$('modeSel').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-mode]');
+  if (!b || net) return;
+  lobbyMode = b.dataset.mode;
+  $('modeSel').querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('on', x === b));
+  $('modeTag').textContent = lobbyMode === 'survival' ? '1v1 · 生存 · 30 分鐘內擊殺多的贏' : '1v1 · 突擊步槍 · 先拿 5 殺的贏';
+  $('btnSolo').textContent = lobbyMode === 'survival' ? '單人練習：自己挖、自己蓋' : '單人練習：打稻草人';
+  const surv = lobbyMode === 'survival';
+  $('keysDuel').hidden = $('tipDuel').hidden = surv;
+  $('keysSurv').hidden = $('tipSurv').hidden = !surv;
+});
 const lobbyStatus = (t) => { $('lobbyStatus').textContent = t || ''; };
 function lobbyBusy(b) { for (const id of ['btnHost', 'btnJoin', 'btnSolo']) $(id).disabled = b; }
 
@@ -273,7 +393,7 @@ $('btnJoin').addEventListener('click', async () => {
   catch (e) { lobbyStatus(errText(e)); lobbyBusy(false); }
 });
 $('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnJoin').click(); });
-$('btnSolo').addEventListener('click', () => { readName(); audio.unlock(); startSolo(); });
+$('btnSolo').addEventListener('click', () => { readName(); audio.unlock(); startSolo(lobbyMode); });
 
 // ---------- 開局 ----------
 function enterPlay() {
@@ -281,7 +401,7 @@ function enterPlay() {
   document.body.classList.add('playing');
   $('lobby').hidden = true;
   hud.show(true);
-  S.kills = S.deaths = 0;
+  S.kills = S.deaths = S.oppKills = 0;
   S.matchOver = false; S.wantRematch = S.oppWantRematch = false;
   $('matchEnd').hidden = true;
   fx.clearHoles();
@@ -289,14 +409,22 @@ function enterPlay() {
   world.trees.reset();
   S.wood = 0; S.wallN = 0;
   setSight(S.sight);
-  spawn('bag');
+  touch.setSurvival(S.gameMode === 'survival');
+  document.body.classList.toggle('survival', S.gameMode === 'survival');
+  if (S.gameMode === 'survival') {
+    S.uiOpen = false;
+    invui.closeAll();
+    surv.reset();
+    spawn('beach');
+  } else spawn('bag');
   updateScore();
   $('clickToPlay').hidden = false;
 }
 
-function startMatch() {
+function startMatch(mode = 'duel') {
   if (S.mode === 'play') return;
   S.online = true;
+  S.gameMode = mode === 'survival' ? 'survival' : 'duel';
   S.side = net.role === 'host' ? 'A' : 'B';
   const mine = SKINS[S.side === 'A' ? 0 : 1], theirs = SKINS[S.side === 'A' ? 1 : 0];
   vm.setSkin(mine.skin);
@@ -304,14 +432,20 @@ function startMatch() {
   opp.avatar.setVisible(false);
   opp.snaps = [];
   enterPlay();
-  hud.toast(`對上 ${S.oppName}。你的基地在${S.side === 'A' ? '西' : '東'}邊`, 4000);
+  hud.toast(S.gameMode === 'survival' ? `對上 ${S.oppName}。生存模式：先拿石頭敲樹，${OPEN_INV}做東西` : `對上 ${S.oppName}。你的基地在${S.side === 'A' ? '西' : '東'}邊`, 5000);
 }
 
 const DUMMY_SPOTS = [[0, 10], [-11, -1], [11, -1], [0, -11], [-21, 7], [21, 7], [-9, 15], [9, 15]];
-function startSolo() {
+function startSolo(mode = 'duel') {
   S.online = false;
   S.side = 'A';
+  S.gameMode = mode === 'survival' ? 'survival' : 'duel';
   vm.setSkin(SKINS[0].skin);
+  if (S.gameMode === 'survival') {
+    enterPlay();
+    hud.toast(`單人生存：拿石頭敲樹拿木頭，${OPEN_INV}做東西`, 5000);
+    return;
+  }
   dummy = {
     avatar: createAvatar(scene, SKINS[3], T), hp: 100, alive: true, spot: 0, t0: 0, respawnAt: 0,
     pos: new THREE.Vector3(), yaw: 0, prevX: 0,
@@ -329,9 +463,12 @@ function placeDummy() {
 }
 
 function spawn(kind) {
-  let sp;
-  if (kind === 'bag') sp = world.spawns[S.side];
-  else {
+  let sp = null;
+  if (S.gameMode === 'survival' && kind === 'bag') {
+    const b = surv.myBags().at(-1);
+    if (b) sp = { pos: new THREE.Vector3(b.x, b.y + 0.1, b.z), yaw: b.r };
+  } else if (kind === 'bag') sp = world.spawns[S.side];
+  if (!sp) {
     const enemy = S.online ? opp.cur.pos : null;
     const ranked = world.spawns.beach
       .map((s) => ({ s, d: enemy ? s.pos.distanceTo(enemy) : Math.random() }))
@@ -347,11 +484,17 @@ function spawn(kind) {
   S.water = 30 + Math.random() * 20; S.food = 60 + Math.random() * 40;
   $('death').hidden = true;
   const w = $('wake'); w.classList.add('on'); void w.offsetWidth; w.classList.remove('on');
-  S.swingT = -1; S.swingCd = 0;
-  S.item = '';
-  selectItem('ak');
-  hud.syringes(S.syringes);
-  hud.wood(S.wood, WALL.cost);
+  S.swingT = -1; S.swingCd = 0; S.bowDraw = 0; S.tossT = -1; S.shake = 0;
+  if (S.gameMode === 'survival') {
+    surv.giveStart();
+    heldKey = '';
+    syncHeld();
+  } else {
+    S.item = '';
+    selectItem('ak');
+    hud.syringes(S.syringes);
+    hud.wood(S.wood, WALL.cost);
+  }
   sendState();
 }
 
@@ -467,10 +610,15 @@ function tryPlace() {
   if (S.online) net.send({ t: 'build', ...desc });
 }
 
+function currentGun() {
+  if (S.gameMode === 'survival') return surv.holdKind() === 'gun' ? surv.held().id : null;
+  return S.item === 'ak' ? 'ak' : null;
+}
 function startReload() {
-  if (S.item !== 'ak' || !S.alive || S.reload >= 0 || S.inject >= 0 || S.ammo === AK.mag) return;
-  S.reload = AK.reload;
-  audio.reload(AK.reload);
+  const g = currentGun();
+  if (!g || !S.alive || S.reload >= 0 || S.inject >= 0 || S.ammo === GUNS[g].mag) return;
+  S.reload = S.reloadTotal = GUNS[g].reload;
+  audio.reload(S.reload);
 }
 function useSyringe() {
   if (!S.alive || S.inject >= 0 || S.reload >= 0) return;
@@ -485,15 +633,22 @@ const aimEuler = new THREE.Euler(0, 0, 0, 'YXZ');
 const tmpV = new THREE.Vector3();
 function spreadDeg() {
   const b = S.body;
+  const G = GUNS[currentGun() || 'ak'];
   const moving = Math.min(S.speed / 4.6, 1.5);
-  let s = lerp(1.5, 0.1, S.ads) + moving * lerp(1.7, 0.55, S.ads);
+  let s = lerp(G.hip, G.adsSpread, S.ads) + moving * lerp(1.7, 0.55, S.ads);
   if (!b.onGround) s += 4;
   s *= lerp(1, 0.7, b.crouch);
   s += Math.min(S.shotIdx, 10) * 0.05 * (1 - S.ads * 0.5);
   return s;
 }
 
-function fire() {
+// 傷害隨距離衰減（湯姆森掉比較多）
+function falloff(G, dist) {
+  const [a, b, m] = G.falloff;
+  return dist <= a ? 1 : dist >= b ? m : lerp(1, m, (dist - a) / (b - a));
+}
+function fire(gid = 'ak') {
+  const G = GUNS[gid];
   S.ammo--;
   S.lastShot = performance.now();
   const b = S.body;
@@ -501,24 +656,25 @@ function fire() {
   aimEuler.set(S.pitch, S.yaw, 0);
   const dir = new THREE.Vector3(Math.tan(sr) * Math.cos(a), Math.tan(sr) * Math.sin(a), -1).normalize().applyEuler(aimEuler);
   const origin = camera.position.clone();
-  const wh = world.raycast(origin, dir, AK.range);
-  let end = wh ? wh.point.clone() : origin.clone().addScaledVector(dir, AK.range);
+  const wh = world.raycast(origin, dir, G.range);
+  let end = wh ? wh.point.clone() : origin.clone().addScaledVector(dir, G.range);
 
   const target = S.online ? opp.avatar : dummy?.avatar;
-  const oh = target?.rayHit(origin, dir, wh ? wh.dist : AK.range);
+  const oh = target?.rayHit(origin, dir, wh ? wh.dist : G.range);
   if (oh) {
     end = origin.clone().addScaledVector(dir, oh.dist);
-    const dmg = Math.round(AK.dmg * AK.mult[oh.part]);
+    // 距離衰減只用在生存模式，對決模式維持原本的 AK 手感
+    const dmg = Math.round(G.dmg * G.mult[oh.part] * (S.gameMode === 'survival' ? falloff(G, oh.dist) : 1));
     fx.blood(end);
     audio.hit(oh.part === 'head');
     hud.hitmarker(oh.part === 'head');
-    if (S.online) net.send({ t: 'hit', dmg, part: oh.part, from: v3(origin) });
-    else dummyHit(dmg, oh.part, origin);
+    if (S.online) net.send({ t: 'hit', dmg, part: oh.part, from: v3(origin), w: gid });
+    else dummyHit(dmg, oh.part, origin, gid);
   } else if (wh) {
     fx.impact(wh.point, wh.normal, wh.surf);
     if (!wh.terrain && !wh.instanced) fx.hole(wh.point, wh.normal);
-    const wall = builder.fromHit(wh);
-    if (wall) hitWall(wall.id, AK.wallDmg);
+    if (S.gameMode === 'survival') surv.gunHit(wh, gid);
+    else { const wall = builder.fromHit(wh); if (wall) hitWall(wall.id, AK.wallDmg); }
   }
 
   camera.updateMatrixWorld();
@@ -526,19 +682,131 @@ function fire() {
   if (S.shotIdx % 2 === 0) fx.tracer(mw, end);
   fx.muzzleLight(mw);
   vm.fire();
-  audio.shot();
-  if (S.online) net.send({ t: 'shot', o: v3(origin), e: v3(end) });
+  if (gid === 'thompson') audio.smg(); else audio.shot();
+  if (S.online) net.send({ t: 'shot', o: v3(origin), e: v3(end), g: gid });
 
   // 後座力直接改準心，不會自己回來 —— 跟 rust 一樣要自己往下拉
   const [ry, rp] = RECOIL[Math.min(S.shotIdx, RECOIL.length - 1)];
-  const m = lerp(1, 0.65, S.ads) * lerp(1, 0.8, b.crouch);
+  const m = lerp(1, 0.65, S.ads) * lerp(1, 0.8, b.crouch) * G.recoil;
   S.pitch = clamp(S.pitch + deg(rp) * m, -1.52, 1.52);
   S.yaw -= deg(ry) * m;
   S.punch += 0.006;
   S.shotIdx++;
 }
 
+// ---------- 生存模式的武器 ----------
+function startSwingSurv(id) {
+  const def = MELEE[id];
+  S.swingCd = def.swing; S.swingT = 0; S.swingWith = id;
+  vm.swing(def.swing);
+  audio.whoosh();
+  if (S.online) net.send({ t: 'sw', dur: def.swing });
+}
+function meleeHitSurv(id) {
+  if (!S.alive) return;
+  const def = MELEE[id];
+  const dir = survHost.aimDir(), origin = camera.position.clone();
+  const wh = world.raycast(origin, dir, def.reach);
+  const oh = S.online && opp.cur.alive ? opp.avatar?.rayHit(origin, dir, wh ? wh.dist : def.reach) : null;
+  if (oh) {
+    const head = oh.part === 'head';
+    const dmg = Math.round(def.dmg * (head ? def.headMult : 1));
+    fx.blood(origin.clone().addScaledVector(dir, oh.dist));
+    audio.hit(head); audio.chop();
+    hud.hitmarker(head);
+    net.send({ t: 'hit', dmg, part: oh.part, from: v3(origin), w: id });
+    return;
+  }
+  if (!wh) return;
+  fx.impact(wh.point, wh.normal, wh.surf);
+  surv.meleeWorld(wh, id, dir);
+}
+function shootArrow(power) {
+  if (!surv.take('arrow', 1)) return;
+  const dir = survHost.aimDir();
+  const spread = deg((1 - power) * 2.5 + (S.speed > 1 ? 0.8 : 0)) * Math.sqrt(Math.random()), a = Math.random() * Math.PI * 2;
+  const right = new THREE.Vector3(Math.cos(S.yaw), 0, -Math.sin(S.yaw));
+  const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+  dir.addScaledVector(right, Math.tan(spread) * Math.cos(a)).addScaledVector(up, Math.tan(spread) * Math.sin(a)).normalize();
+  const o = camera.position.clone().addScaledVector(dir, 0.3);
+  const v = dir.clone().multiplyScalar(lerp(BOW.minSpeed, BOW.maxSpeed, power));
+  const id = surv.nid('a');
+  proj.spawnArrow({ id, o, v, mine: true, power });
+  surv.spawnArrowNet(id, o, v);
+  audio.twang();
+  S.punch += 0.01;
+}
+function updateWeaponSurv(dt) {
+  const it = surv.held(), kind = surv.holdKind();
+  if (S.reload >= 0) {
+    S.reload -= dt;
+    if (S.reload <= 0) {
+      S.reload = -1;
+      if (kind === 'gun') { S.ammo = GUNS[it.id].mag; it.d = { ...(it.d || {}), mag: S.ammo }; invui.renderHotbar(); }
+    }
+  }
+  const ready = S.alive && inputActive() && !S.matchOver && !S.uiOpen;
+  const pressed = firing && !S.wasFiring, released = !firing && S.wasFiring;
+  S.wasFiring = firing;
+  S.swingCd = Math.max(0, S.swingCd - dt);
+  S.tossCd = Math.max(0, S.tossCd - dt);
+  if (S.swingT >= 0) {
+    S.swingT += dt;
+    const def = MELEE[S.swingWith];
+    if (def && S.swingT >= def.hitAt) { S.swingT = -1; meleeHitSurv(S.swingWith); }
+  }
+  if (S.tossT >= 0) {
+    S.tossT += dt;
+    if (S.tossT >= 0.28) {
+      S.tossT = -1;
+      if (surv.held()?.id === 'grenade') {
+        surv.throwNade(camera.position.clone().add(survHost.forwardFlat().multiplyScalar(0.4)), survHost.aimDir());
+        if (S.online) net.send({ t: 'sw', dur: 0.55 });
+      }
+    }
+  }
+  if (!it) return;
+  if (kind === 'melee') { if (firing && ready && S.swingCd <= 0) startSwingSurv(it.id); return; }
+  if (kind === 'throw') {
+    if (pressed && ready && S.tossCd <= 0 && S.tossT < 0) { S.tossT = 0; S.tossCd = 0.9; vm.toss(); audio.whoosh(); }
+    return;
+  }
+  if (kind === 'build' || kind === 'deploy') {
+    if (pressed && ready && S.swingCd <= 0) { if (surv.placeCurrent()) vm.place(); }
+    return;
+  }
+  if (kind === 'bow') {
+    const arrows = surv.count('arrow');
+    if (firing && ready && !S.sprinting && arrows > 0) S.bowDraw = Math.min(1, S.bowDraw + dt / BOW.draw);
+    else if (S.bowDraw > 0) {
+      if (released && ready && S.bowDraw >= 0.2 && arrows > 0) shootArrow(S.bowDraw);
+      S.bowDraw = 0;
+    }
+    if (pressed && arrows <= 0) hud.toast('沒有箭了（5 木頭做 2 支）', 1400);
+    return;
+  }
+  if (kind === 'gun') {
+    const G = GUNS[it.id];
+    const canFire = ready && S.reload < 0 && !S.sprinting;
+    if (firing && canFire) {
+      S.fireCd -= dt;
+      while (S.fireCd <= 0) {
+        if (S.ammo <= 0) { audio.empty(); startReload(); S.fireCd = 0.3; break; }
+        fire(it.id);
+        it.d = { ...(it.d || {}), mag: S.ammo };
+        S.fireCd += 60 / G.rpm;
+      }
+      invui.renderHotbar();
+    } else {
+      S.fireCd = Math.max(0, S.fireCd - dt);
+      if (S.alive && S.ammo === 0 && S.reload < 0 && !firing) startReload();
+    }
+    if (performance.now() - S.lastShot > 280) S.shotIdx = 0;
+  }
+}
+
 function updateWeapon(dt) {
+  if (S.gameMode === 'survival') { updateWeaponSurv(dt); return; }
   if (S.reload >= 0) {
     S.reload -= dt;
     if (S.reload <= 0) { S.reload = -1; S.ammo = AK.mag; }
@@ -594,28 +862,35 @@ function onHit(m) {
   const from = toV(m.from);
   S.hp -= m.dmg;
   S.regen = 0;
+  surv.hurt();
   audio.hurt();
-  hud.hurt(headingTo(from));
+  if (!m.self) hud.hurt(headingTo(from));
   S.punch -= 0.012;   // 被打到鏡頭會抖一下
-  if (S.hp <= 0) die({ by: S.oppName, part: m.part, dist: from.distanceTo(S.body.pos), w: m.w || 'ak' });
+  if (S.hp <= 0) die({ by: m.self ? S.myName : S.oppName, part: m.part, dist: from.distanceTo(S.body.pos), w: m.w || 'ak', self: !!m.self });
 }
 
 function die(info) {
   S.alive = false; S.hp = 0; S.deaths++;
-  firing = aiming = false; S.reload = -1; S.inject = -1; S.swingT = -1;
+  if (!info.self) S.oppKills++;
+  firing = aiming = false; S.reload = -1; S.inject = -1; S.swingT = -1; S.bowDraw = 0; S.tossT = -1;
   // rust：死了身上的東西全掉光
-  if (S.wood > 0) hud.toast(`死掉了，${S.wood} 木頭全掉光`, 2000);
-  S.wood = 0; hud.wood(0, WALL.cost);
+  if (S.gameMode === 'survival') {
+    if (S.uiOpen) { invui.closeAll(); S.uiOpen = false; }
+    surv.onDeath(S.body.pos);
+  } else {
+    if (S.wood > 0) hud.toast(`死掉了，${S.wood} 木頭全掉光`, 2000);
+    S.wood = 0; hud.wood(0, WALL.cost);
+  }
   builder.showGhost(null); hud.hint(null);
   S.deathAt = performance.now();
-  if (S.online) net.send({ t: 'dead', part: info.part, dist: +info.dist.toFixed(1), w: info.w });
+  if (S.online) net.send({ t: 'dead', part: info.part, dist: +info.dist.toFixed(1), w: info.w, self: !!info.self });
   hud.killfeed(info.by, S.myName, { head: info.part === 'head', mine: true, weapon: info.w });
   updateScore();
   releaseControl();
-  const lost = S.online && S.deaths >= KILLS_TO_WIN;
+  const lost = S.online && S.gameMode === 'duel' && S.oppKills >= KILLS_TO_WIN;
   const PART = { head: '爆頭', body: '身體', legs: '腿' };
   $('killerCard').innerHTML = `
-    <div><span class="lbl">擊殺你的人</span><span class="who">${escapeHtml(info.by)}</span></div>
+    <div><span class="lbl">擊殺你的人</span><span class="who">${info.self ? '你自己 😵' : escapeHtml(info.by)}</span></div>
     <div><span class="lbl">武器</span>${ICON[info.w] || ICON.ak}</div>
     <div><span class="lbl">距離</span>${info.dist.toFixed(1)} m</div>
     <div><span class="lbl">最後一槍</span>${PART[info.part] || '?'}</div>`;
@@ -632,7 +907,11 @@ $('btnBeach').addEventListener('click', () => { spawn('beach'); resumeControl();
 function updateDeathScreen(now) {
   if ($('death').hidden) return;
   const t = (now - S.deathAt) / 1000;
-  const bag = Math.max(0, BAG_CD - t), beach = Math.max(0, BEACH_CD - t);
+  // 生存模式：自己有放睡袋才能從睡袋重生，冷卻比較久
+  const survival = S.gameMode === 'survival';
+  $('btnBag').hidden = survival && !surv.myBags().length;
+  $('btnBag').querySelector('span').textContent = survival ? '你放的睡袋' : '你的基地';
+  const bag = Math.max(0, (survival ? 15 : BAG_CD) - t), beach = Math.max(0, BEACH_CD - t);
   $('btnBag').disabled = bag > 0;
   $('btnBeach').disabled = beach > 0;
   $('bagCd').textContent = bag > 0 ? `冷卻中 ${bag.toFixed(1)}s` : '重生 ▸';
@@ -640,7 +919,10 @@ function updateDeathScreen(now) {
 }
 
 function updateScore() {
-  if (S.online) hud.score(S.kills, S.deaths, S.myName, S.oppName, KILLS_TO_WIN);
+  if (S.gameMode === 'survival') {
+    const sec = Math.ceil(surv.remaining), mm = String(Math.floor(sec / 60)).padStart(2, '0'), ss = String(sec % 60).padStart(2, '0');
+    hud.score(S.kills, S.oppKills, S.myName, S.online ? S.oppName : '', 0, `生存模式 · 剩 ${mm}:${ss}`);
+  } else if (S.online) hud.score(S.kills, S.oppKills, S.myName, S.oppName, KILLS_TO_WIN);
   else hud.score(S.kills, 0, S.myName, '', 0);
 }
 
@@ -654,11 +936,12 @@ function endMatch(win, reason) {
     t.textContent = reason; t.className = '';
     $('btnRematch').hidden = true;
   } else {
-    t.textContent = win ? '你贏了' : '你輸了';
-    t.className = win ? 'win' : 'lose';
-    $('btnRematch').hidden = false; $('btnRematch').disabled = false;
+    t.textContent = win === 'draw' ? '平手' : win ? '你贏了' : '你輸了';
+    t.className = win === 'draw' ? '' : win ? 'win' : 'lose';
+    $('btnRematch').hidden = !S.online; $('btnRematch').disabled = false;
   }
-  $('endScore').textContent = `${S.myName} ${S.kills} : ${S.deaths} ${S.oppName}`;
+  if (S.gameMode === 'survival') { invui.closeAll(); S.uiOpen = false; }
+  $('endScore').textContent = S.online ? `${S.myName} ${S.kills} : ${S.oppKills} ${S.oppName}` : `擊殺 ${S.kills}`;
   $('rematchStatus').textContent = '';
   $('matchEnd').hidden = false;
 }
@@ -713,13 +996,14 @@ function onMessage(m) {
   switch (m.t) {
     case 'hello':
       S.oppName = String(m.name || '對手').slice(0, 14);
-      if (net.role === 'host' && S.mode !== 'play') { net.send({ t: 'start' }); startMatch(); }
+      if (net.role === 'host' && S.mode !== 'play') { net.send({ t: 'start', mode: lobbyMode }); startMatch(lobbyMode); }
       break;
-    case 'start': startMatch(); break;
+    case 'start': startMatch(m.mode); break;
+    case 'sv': if (S.mode === 'play') surv.onMessage(m); break;
     case 'full': lobbyStatus('這個房間已經有兩個人了（1v1）'); lobbyBusy(false); break;
     case 'st': {
       const prev = opp.snaps[opp.snaps.length - 1];
-      const snap = { t: now, pos: toV(m.p), yaw: m.y, pitch: m.x, crouch: m.c, speed: m.v, g: m.g, alive: !!m.a, item: ITEMS[m.w] || 'ak', sight: SIGHT_ORDER[m.sc] || 'iron' };
+      const snap = { t: now, pos: toV(m.p), yaw: m.y, pitch: m.x, crouch: m.c, speed: m.v, g: m.g, alive: !!m.a, item: m.h || ITEMS[m.w] || 'ak', sight: SIGHT_ORDER[m.sc] || 'iron', draw: m.dr || 0 };
       // 重生瞬移：不要從屍體位置滑過去
       if (prev && (prev.pos.distanceTo(snap.pos) > 8 || prev.alive !== snap.alive)) opp.snaps = [];
       opp.snaps.push(snap);
@@ -733,7 +1017,7 @@ function onMessage(m) {
       fx.tracer(mw, e);
       fx.muzzleLight(mw);
       opp.avatar.flash();
-      audio.shotAt(o, o.distanceTo(camera.position));
+      audio.shotAt(o, o.distanceTo(camera.position), m.g);
       // 在本地重算一次彈道，命中牆面就補上火花和彈孔
       const dir = e.clone().sub(o); const len = dir.length(); dir.normalize();
       const wh = world.raycast(o, dir, len + 0.3);
@@ -745,7 +1029,7 @@ function onMessage(m) {
     }
     case 'hit': onHit(m); break;
     case 'sw':
-      opp.avatar?.swing();
+      opp.avatar?.swing(m.dur);
       audio.whoosh(opp.cur.pos, opp.cur.pos.distanceTo(camera.position));
       break;
     case 'build': {
@@ -765,11 +1049,16 @@ function onMessage(m) {
       break;
     }
     case 'dead':
+      if (m.self) {   // 對手被自己的手雷炸死：不算你的擊殺
+        hud.killfeed(S.oppName, S.oppName, { mine: false, weapon: m.w || 'grenade' });
+        hud.toast(`${S.oppName} 被自己的手雷炸死了`, 2000);
+        break;
+      }
       S.kills++;
       hud.killfeed(S.myName, S.oppName, { head: m.part === 'head', mine: true, weapon: m.w || 'ak' });
       hud.toast(`擊殺 ${S.oppName}${m.part === 'head' ? '（爆頭）' : ''} · ${m.dist}m`, 2000);
       updateScore();
-      if (S.kills >= KILLS_TO_WIN) setTimeout(() => endMatch(true), 1200);
+      if (S.gameMode === 'duel' && S.kills >= KILLS_TO_WIN) setTimeout(() => endMatch(true), 1200);
       break;
     case 'rematch': S.oppWantRematch = true; checkRematch(); break;
     case 'ping': net.send({ t: 'pong', t0: m.t0 }); break;
@@ -783,7 +1072,7 @@ function sendState() {
   net.send({
     t: 'st', p: v3(b.pos), y: +S.yaw.toFixed(3), x: +S.pitch.toFixed(3),
     c: +b.crouch.toFixed(2), v: +S.speed.toFixed(2), g: b.onGround ? 1 : 0, a: S.alive ? 1 : 0,
-    w: Math.max(0, ITEMS.indexOf(S.item)), sc: SIGHT_ORDER.indexOf(S.sight),
+    w: Math.max(0, ITEMS.indexOf(S.item)), sc: SIGHT_ORDER.indexOf(S.sight), h: S.item, dr: +S.bowDraw.toFixed(2),
   });
 }
 
@@ -811,7 +1100,7 @@ function updateOpp(dt, now) {
   c.pitch = lerp(a.pitch, b.pitch, k);
   c.crouch = lerp(a.crouch, b.crouch, k);
   c.speed = lerp(a.speed, b.speed, k);
-  c.alive = b.alive; c.g = b.g; c.item = b.item; c.sight = b.sight;
+  c.alive = b.alive; c.g = b.g; c.item = b.item; c.sight = b.sight; c.draw = b.draw;
   opp.avatar.update(c, dt);
   while (snaps.length > 2 && snaps[1].t < rt) snaps.shift();
 
@@ -898,7 +1187,8 @@ function readInput(active) {
 function updatePlay(dt, now) {
   const b = S.body;
   const active = inputActive() && S.alive && !S.matchOver;
-  const inp = { ...readInput(active), ads: active && aiming && S.item === 'ak' && S.reload < 0 && S.inject < 0, yaw: S.yaw };
+  const canAds = S.item === 'ak' || S.item === 'thompson' || S.item === 'bow';
+  const inp = { ...readInput(active), ads: active && aiming && canAds && S.reload < 0 && S.inject < 0, yaw: S.yaw };
   if (TOUCH) {
     const { dx, dy } = touch.consumeLook();
     if (active) {
@@ -925,7 +1215,8 @@ function updatePlay(dt, now) {
 
   // 8 倍鏡舉起來慢一點
   S.ads += ((inp.ads && !S.sprinting ? 1 : 0) - S.ads) * (1 - Math.exp(-(S.sight === 'scope' ? 9 : 14) * dt));
-  const fovTarget = lerp(settings.fov, settings.fov * SIGHTS[S.sight].fov, S.ads);
+  const zoom = S.item === 'ak' ? SIGHTS[S.sight].fov : S.item === 'thompson' ? 0.62 : S.item === 'bow' ? 0.8 : 1;
+  const fovTarget = lerp(settings.fov, settings.fov * zoom, S.ads);
   // 8 倍鏡開到底：換成全黑鏡框畫面，手上的槍不畫
   S.scoped = S.alive && S.item === 'ak' && S.sight === 'scope' && S.ads > 0.85;
   hud.scope(S.scoped);
@@ -942,12 +1233,15 @@ function updatePlay(dt, now) {
     S.roll += (0.9 - S.roll) * (1 - Math.exp(-4 * dt));
   }
   S.punch *= Math.exp(-12 * dt);
+  S.shake = Math.max(0, S.shake - dt * 1.6);
+  const sk = S.shake * S.shake * 0.05;
   camera.position.set(b.pos.x, S.eyeY, b.pos.z);
-  camera.rotation.set(S.pitch + S.punch, S.yaw, S.roll);
+  camera.rotation.set(S.pitch + S.punch + (Math.random() - 0.5) * sk, S.yaw + (Math.random() - 0.5) * sk, S.roll);
 
   updateWeapon(dt);
   updateOpp(dt, now);
   updateDummy(dt, now);
+  if (S.gameMode === 'survival') updateSurvival(dt, now);
 
   S.sendAcc += dt;
   if (S.sendAcc >= 1 / SEND_HZ) { S.sendAcc = 0; sendState(); }
@@ -959,20 +1253,67 @@ function updatePlay(dt, now) {
 
   vm.update({
     dt, ads: S.ads, sprint: S.sprinting && S.speed > 3, speed: S.speed, onGround: b.onGround,
-    reload: S.reload >= 0 ? 1 - S.reload / AK.reload : -1,
+    reload: S.reload >= 0 ? 1 - S.reload / S.reloadTotal : -1,
     down: S.inject >= 0, mdx: S.mdx, mdy: S.mdy,
+    bowDraw: S.bowDraw, hasArrow: S.gameMode === 'survival' && surv.count('arrow') > 0, hasNade: S.gameMode !== 'survival' || surv.held()?.id === 'grenade',
   });
 
   hud.health(S.hp);
   hud.survival(S.water, S.food);
-  hud.ammo(S.ammo, AK.mag, S.reload >= 0);
+  const gunNow = S.item === 'ak' || S.item === 'thompson';
+  if (S.gameMode === 'survival') {
+    if (gunNow) hud.ammo(S.ammo, GUNS[S.item].mag, S.reload >= 0, S.item === 'ak' ? '5.56 步槍彈' : '.45 手槍彈');
+    else if (S.item === 'bow') hud.ammo(surv.count('arrow'), null, false, '箭');
+    else if (S.item === 'grenade') hud.ammo(surv.count('grenade'), null, false, '手雷');
+    else hud.ammo(null);
+  } else hud.ammo(S.ammo, AK.mag, S.reload >= 0);
   hud.compass(S.yaw);
-  hud.crosshair(S.item === 'ak' ? 4 + spreadDeg() * 6 : 3, S.item === 'ak' ? S.ads : 0);
-  updateBuildAndLook(now);
-  if (S.reload >= 0) hud.action('換彈中', 1 - S.reload / AK.reload);
+  hud.crosshair(gunNow ? 4 + spreadDeg() * 6 : 3, gunNow ? S.ads : 0);
+  if (S.gameMode === 'duel') updateBuildAndLook(now);
+  if (S.reload >= 0) hud.action('換彈中', 1 - S.reload / S.reloadTotal);
+  else if (S.bowDraw > 0) hud.action(S.bowDraw >= 1 ? '拉滿了' : '拉弓', S.bowDraw);
   else if (S.inject >= 0) hud.action('注射中', 1 - S.inject / SYRINGE_TIME);
   else hud.action(null);
   updateDeathScreen(now);
+}
+
+// 生存模式每幀：製作、冶煉、投射物、預覽、互動提示、回血、倒數
+function updateSurvival(dt, now) {
+  surv.update(dt, now);
+  structs.update(dt, S.side);
+  proj.update(dt, {
+    arrowHitsTarget: (o, d, max) => (S.online && opp.cur.alive ? opp.avatar?.rayHit(o, d, max) : null),
+    onArrowHit: (a, wh, th) => {
+      if (th) {
+        const head = th.part === 'head';
+        const dmg = Math.round(BOW.dmg * a.power * (head ? BOW.headMult : th.part === 'legs' ? 0.75 : 1));
+        fx.blood(a.pos); audio.hit(head); hud.hitmarker(head);
+        if (S.online) net.send({ t: 'hit', dmg, part: th.part, from: v3(camera.position), w: 'bow' });
+      } else if (wh) {
+        fx.impact(wh.point, wh.normal, wh.surf);
+        audio.thunk(a.mine ? null : wh.point, wh.point.distanceTo(camera.position));
+        if (a.mine) surv.hitThings(wh, { piece: BOW.pieceDmg, crate: BOW.crateDmg, deploy: BOW.pieceDmg });
+      }
+    },
+    onNadeBoom: (n) => { surv.explode(n.pos.clone(), true); surv.sendBoom(n.id, n.pos); },
+  });
+  const kind = surv.holdKind();
+  if (S.alive && !S.matchOver && (kind === 'build' || kind === 'deploy')) {
+    const pv = surv.updatePreview();
+    if (pv) {
+      const name = kind === 'build' ? (PIECE_NAME[pv.type] || '') : surv.held()?.id && ITEM_NAME[surv.held().id];
+      const cost = kind === 'build' ? ` · ${COSTS[pv.type]} 木頭` : '';
+      hud.hint(pv.ok ? `${TOUCH ? '按放置' : '左鍵'}：${name}${cost}${kind === 'build' ? (TOUCH ? ' · 按「選擇」換種類' : ' · 右鍵換種類') : ''}` : `${name}：${pv.reason}`, pv.ok);
+    } else hud.hint(null);
+  } else { surv.hidePreview(); hud.hint(null); }
+  const tg = S.alive ? surv.target : null;
+  hud.interact(tg?.label && !S.uiOpen ? tg.label : null);
+  touch.setUse(tg?.label && !S.uiOpen ? tg.label : null);
+  hud.look(tg?.hp || null);
+  // 12 秒沒受傷就慢慢回血
+  if (S.alive && S.hp < 100 && now - surv.lastHurt > REGEN_DELAY) S.hp = Math.min(100, S.hp + REGEN_RATE * dt);
+  if (now - S.scoreAt > 500) { S.scoreAt = now; updateScore(); }
+  if (!S.matchOver && surv.remaining <= 0) endMatch(S.online ? (S.kills > S.oppKills ? true : S.kills < S.oppKills ? false : 'draw') : true, S.online ? null : '時間到');
 }
 
 // 拿著藍圖：每幀算預覽位置；平常：每 0.1 秒看一下準心對著什麼（牆的耐久、樹還剩多少）

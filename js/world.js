@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeTextures, rng } from './textures.js';
+import { NODE_ORE } from './items.js';
 
 export const WATER_Y = -1.5;
 export const BOUNDS = { minX: -55, maxX: 55, minZ: -54, maxZ: 44 };
@@ -732,25 +733,61 @@ export function buildWorld(scene, opts = {}) {
     blockers.push({ x, z, r: r + 1.2 });
     return m;
   }
-  const VEIN = { metal: '#a05a2c', sulfur: '#d2b736', stone: '#b9b3a4' };
+  // 礦點：一顆石頭 + 一圈礦脈。生存模式可以挖（挖完消失、時間到重生），對決模式只是裝飾。
+  // 整組包在 Group 裡，靜態合批才不會把它併進去（併進去就藏不起來了）
+  const VEIN = { metal: '#b0622e', sulfur: '#ddc23a' };
+  const veinMat = {
+    metal: new THREE.MeshStandardMaterial({ color: VEIN.metal, roughness: 0.45, metalness: 0.55, flatShading: true }),
+    sulfur: new THREE.MeshStandardMaterial({ color: VEIN.sulfur, roughness: 0.8, flatShading: true }),
+  };
+  const nodeList = [];
   function node(x, z, kind, seed) {
-    const g = heightAt(x, z);
-    rock(x, z, 0.85, seed);
-    const vm = new THREE.MeshStandardMaterial({ color: VEIN[kind], roughness: kind === 'metal' ? 0.5 : 0.8, metalness: kind === 'metal' ? 0.5 : 0, flatShading: true });
+    const g = heightAt(x, z), r0 = 0.85;
+    const grp = new THREE.Group();
+    const m = new THREE.Mesh(rockGeo(seed % 5), M.rock);
+    m.scale.set(r0, r0 * 0.72, r0 * 0.92);
+    m.rotation.y = seed * 1.7;
+    m.position.set(x, g - r0 * 0.12, z);
+    m.castShadow = m.receiveShadow = true;
+    m.userData = { surf: 'stone', nodeIdx: nodeList.length };
+    grp.add(m); solids.push(m);
     const r = rng(seed);
-    for (let i = 0; i < 7; i++) {
-      const a = r() * Math.PI * 2, e = 0.2 + r() * 0.9;
-      const v = new THREE.Mesh(new THREE.BoxGeometry(0.22 + r() * 0.2, 0.1 + r() * 0.12, 0.2 + r() * 0.2), vm);
+    for (let i = 0; i < 9; i++) {
+      const a = r() * Math.PI * 2, e = 0.15 + r() * 0.95;
+      const v = new THREE.Mesh(new THREE.BoxGeometry(0.22 + r() * 0.22, 0.1 + r() * 0.14, 0.2 + r() * 0.22), veinMat[kind]);
       v.position.set(x + Math.cos(a) * Math.cos(e) * 0.78, g - 0.1 + Math.sin(e) * 0.6, z + Math.sin(a) * Math.cos(e) * 0.72);
       v.rotation.set(r() * 3, r() * 3, r() * 3);
-      scene.add(v);
+      v.castShadow = true;
+      grp.add(v);
     }
+    scene.add(grp);
+    const col = { type: 'cyl', x, z, r: r0 * 0.82, y0: g - 2, y1: g + r0 * 0.62 };
+    colliders.push(col);
+    blockers.push({ x, z, r: r0 + 1.2 });
+    nodeList.push({ i: nodeList.length, kind, x, y: g, z, group: grp, mesh: m, col, alive: true, ore: NODE_ORE });
   }
   const ROCKS = [[-22, -15, 2.4], [-25, 12, 2.8], [-9, -17, 2.0], [-30, 4, 1.7], [-47, 10, 3.4], [-20, -32, 3.0],
     [-36, -36, 4.2], [-7, 22, 1.8], [-26, 26, 2.4], [-50, -24, 3.2], [-14, -44, 4.0], [-40, -48, 5.0], [-4, -30, 2.6]];
   ROCKS.forEach(([x, z, r], i) => { rock(x, z, r, i * 7 + 3); rock(-x, z, r, i * 7 + 3); });
-  const NODES = [[-18, -22, 'stone'], [-29, -1, 'metal'], [-12, 15, 'sulfur'], [-45, -3, 'metal'], [-33, -28, 'sulfur']];
+  const NODES = [[-18, -22, 'metal'], [-29, -1, 'metal'], [-12, 15, 'sulfur'], [-45, -3, 'metal'], [-33, -28, 'sulfur']];
   NODES.forEach(([x, z, k], i) => { node(x, z, k, 100 + i); node(-x, z, k, 100 + i); });
+  // 路邊再撒一排（鐵、硫磺輪流），左右鏡像
+  {
+    const road = ROADS[0];
+    let flip = 1, kind = 0, n = 0;
+    for (let i = 0; i < road.length - 1 && n < 5; i++) {
+      const [ax, az] = road[i], [bx, bz] = road[i + 1];
+      const len = Math.hypot(bx - ax, bz - az), tx = (bx - ax) / len, tz = (bz - az) / len;
+      for (let d = 3; d < len && n < 5; d += 7) {
+        const x = ax + tx * d - tz * 5.2 * flip, z = az + tz * d + tx * 5.2 * flip;
+        flip = -flip;
+        if (x > -6 || blocked(x, z, 0.4) || nodeList.some((o) => Math.hypot(o.x - x, o.z - z) < 6)) continue;
+        const k = kind++ % 2 ? 'sulfur' : 'metal';
+        node(x, z, k, 200 + n); node(-x, z, k, 200 + n);
+        n++;
+      }
+    }
+  }
 
   // ---------- 石灰岩壁：北邊跟東西兩側的地圖邊緣，一層一層疊起來的淺灰岩 ----------
   function cliffStack(x, z, size, seed) {
@@ -1271,19 +1308,24 @@ export function buildWorld(scene, opts = {}) {
 
   // ---------- 子彈射線 ----------
   const rc = new THREE.Raycaster();
+  // 沿著射線每 0.35m 檢查一次有沒有鑽到地底，最後一定檢查終點 ——
+  // 手雷、箭每一小步只走零點幾公尺，不檢查終點會整個穿過地面
   function rayTerrain(o, d, max) {
     const step = 0.35;
-    for (let t = step; t < max; t += step) {
+    if (!(max < 2000)) max = 2000;
+    let prev = 0;
+    for (let t = Math.min(step, max); ; t = Math.min(t + step, max)) {
       const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t;
       if (y < heightAt(x, z)) {
-        let a = t - step, b = t;
+        let a = prev, b = t;
         for (let i = 0; i < 8; i++) {
           const m = (a + b) / 2;
           if (o.y + d.y * m < heightAt(o.x + d.x * m, o.z + d.z * m)) b = m; else a = m;
         }
         return b;
       }
-      if (y > 60 && d.y > 0) break;
+      if (t >= max || (y > 60 && d.y > 0)) break;
+      prev = t;
     }
     return Infinity;
   }
@@ -1331,8 +1373,46 @@ export function buildWorld(scene, opts = {}) {
     }
   }
 
+  // ---------- 礦點 API（生存模式用） ----------
+  const nodeApi = {
+    list: nodeList,
+    fromHit(hit) { const i = hit?.mesh?.userData.nodeIdx; return i === undefined ? null : nodeList[i] || null; },
+    mine(n, amt) { if (!n.alive) return 0; const got = Math.min(amt, n.ore); n.ore -= got; return got; },
+    setAlive(n, alive) {
+      if (n.alive === alive) return;
+      n.alive = alive;
+      n.group.visible = alive;
+      const k = colliders.indexOf(n.col), j = solids.indexOf(n.mesh);
+      if (alive) { n.ore = NODE_ORE; if (k < 0) colliders.push(n.col); if (j < 0) solids.push(n.mesh); }
+      else { if (k >= 0) colliders.splice(k, 1); if (j >= 0) solids.splice(j, 1); }
+    },
+    reset() { for (const n of nodeList) { nodeApi.setAlive(n, true); n.ore = NODE_ORE; } },
+  };
+
+  // ---------- 箱子刷新點（生存模式）：超市一樓、屋頂、停車場、路邊 ----------
+  const crateSpots = [];
+  {
+    const fy = ZONES[2].h + 0.15, pt = fy + 3.2;
+    for (const [x, z] of [[-4.5, -2.5], [1.5, -4.6], [4.5, -2.4], [-1.0, 0.9], [1.6, 0.9]]) crateSpots.push(new THREE.Vector3(x, fy, z));
+    for (const [x, z] of [[0, -2], [4.6, -1.9]]) crateSpots.push(new THREE.Vector3(x, pt, z));
+    for (const [x, z] of [[-7.6, 3.2], [7.6, 3.2], [-2.0, 9.0]]) crateSpots.push(new THREE.Vector3(x, heightAt(x, z), z));
+    const road = ROADS[0];
+    let flip = 1;
+    for (let i = 0; i < road.length - 1; i++) {
+      const [ax, az] = road[i], [bx, bz] = road[i + 1];
+      const len = Math.hypot(bx - ax, bz - az), tx = (bx - ax) / len, tz = (bz - az) / len;
+      for (let d = 5; d < len; d += 10) {
+        const x = ax + tx * d - tz * 3.9 * flip, z = az + tz * d + tx * 3.9 * flip;
+        flip = -flip;
+        if (x > -8 || blocked(x, z, -1.5) || nodeList.some((o) => Math.hypot(o.x - x, o.z - z) < 3)) continue;
+        if (colliders.some((c) => c.type === 'cyl' && Math.hypot(c.x - x, c.z - z) < c.r + 0.9)) continue;   // 不要生在樹幹裡
+        crateSpots.push(new THREE.Vector3(x, heightAt(x, z), z), new THREE.Vector3(-x, heightAt(-x, z), z));
+      }
+    }
+  }
+
   return {
-    T, colliders, solids, spawns, heightAt, raycast, sun, sunDir, env, scene, trees: treeApi,
+    T, colliders, solids, spawns, heightAt, raycast, sun, sunDir, env, scene, trees: treeApi, nodes: nodeApi, crateSpots,
     update(t, dt) { for (const u of updaters) u(t, dt); },
   };
 }

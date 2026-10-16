@@ -18,7 +18,11 @@ export function createTouch(root, { onTap }) {
     <button class="tbtn" data-b="scope" id="tScope">照門</button>
     <button class="tbtn" data-b="jump" id="tJump">跳</button>
     <button class="tbtn" data-b="crouch" id="tCrouch">蹲</button>
-    <button class="tbtn" data-b="reload" id="tReload">換彈</button>`;
+    <button class="tbtn" data-b="reload" id="tReload">換彈</button>
+    <button class="tbtn" data-b="inv" id="tInv" hidden aria-label="背包">背包</button>
+    <button class="tbtn" data-b="use" id="tUse" hidden>E</button>
+    <button class="tbtn" data-b="pick" id="tPick" hidden>選擇</button>
+    <button class="tbtn" data-b="rot" id="tRot" hidden>轉</button>`;
 
   const stick = root.querySelector('#tStick'), knob = root.querySelector('#tKnob');
   const btn = (b) => root.querySelector(`#t${b[0].toUpperCase()}${b.slice(1)}`);
@@ -133,17 +137,24 @@ export function createTouch(root, { onTap }) {
     setAim(v) { st.aim = v; syncButtons(); },
     setSightLabel(t) { btn('scope').textContent = t; },
     // 手上換東西：開火鍵的圖示跟著換，非 AK 時把瞄準鍵藏起來
-    setMode(item) {
-      const label = item === 'rock' ? '揮' : item === 'plan' ? '放置' : null;
+    // item：手上拿的東西（ak / thompson / rock / sword / bow / grenade / plan / none）
+    // kind：生存模式的手持型態（build / deploy 時多一顆「轉」，build 再多一顆「選擇」）
+    setMode(item, kind = null) {
+      const gun = item === 'ak' || item === 'thompson';
+      const label = { rock: '揮', sword: '揮', plan: '放置', bow: '拉弓', grenade: '丟', none: '—' }[item] || null;
       for (const id of ['#tFire', '#tFire2']) {
         const b = root.querySelector(id);
         b.innerHTML = label ? `<span>${label}</span>` : ICON_FIRE;
       }
-      btn('aim').hidden = item !== 'ak';
-      btn('reload').hidden = item !== 'ak';
+      btn('aim').hidden = !gun && item !== 'bow';
+      btn('reload').hidden = !gun;
       btn('scope').hidden = item !== 'ak';
-      if (item !== 'ak') { st.aim = false; syncButtons(); }
+      btn('pick').hidden = kind !== 'build';
+      btn('rot').hidden = kind !== 'build' && kind !== 'deploy';
+      if (!gun && item !== 'bow') { st.aim = false; syncButtons(); }
     },
+    setSurvival(on) { btn('inv').hidden = !on; },
+    setUse(text) { const b = btn('use'); b.hidden = !text; },
     setActive(v) {
       st.active = v;
       root.hidden = !v;

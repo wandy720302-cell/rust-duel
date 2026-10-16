@@ -1,0 +1,116 @@
+// 生存模式的物品、配方、建築、掉落表。純資料，不碰 three.js，node 也能直接測。
+
+// ---------- 圖示（64×64 的彩色 SVG） ----------
+const svg = (body) => `<svg viewBox="0 0 64 64" class="itemIcon">${body}</svg>`;
+export const ICONS = {
+  wood: svg('<rect x="8" y="30" width="44" height="12" rx="6" fill="#7a5532"/><rect x="12" y="18" width="44" height="12" rx="6" fill="#8a6038"/><circle cx="52" cy="24" r="6" fill="#c9a26a"/><circle cx="52" cy="24" r="3" fill="none" stroke="#8a6038"/><circle cx="48" cy="36" r="6" fill="#c09660"/><circle cx="48" cy="36" r="3" fill="none" stroke="#7a5532"/>'),
+  metal_ore: svg('<path d="M10 44 L16 24 L30 14 L46 18 L56 34 L48 50 L24 52 Z" fill="#8d8a83"/><circle cx="28" cy="30" r="4" fill="#b8622c"/><circle cx="40" cy="38" r="3.5" fill="#a85a28"/><circle cx="36" cy="24" r="2.5" fill="#c06a30"/><circle cx="22" cy="42" r="2.5" fill="#b0602c"/>'),
+  sulfur_ore: svg('<path d="M10 44 L16 24 L30 14 L46 18 L56 34 L48 50 L24 52 Z" fill="#8d8a83"/><circle cx="28" cy="30" r="4" fill="#e3c63a"/><circle cx="40" cy="38" r="3.5" fill="#d9bb30"/><circle cx="36" cy="24" r="2.5" fill="#efd24a"/><circle cx="22" cy="42" r="2.5" fill="#d8bc34"/>'),
+  metal: svg('<path d="M12 40 L22 22 L30 34 Z" fill="#a9adb2"/><path d="M28 46 L38 20 L48 40 Z" fill="#8f949a"/><path d="M40 50 L50 30 L56 48 Z" fill="#b8bcc0"/><path d="M16 50 L26 38 L34 52 Z" fill="#9aa0a6"/>'),
+  sulfur: svg('<path d="M8 50 Q32 10 56 50 Z" fill="#e2c43a"/><path d="M18 50 Q32 24 46 50 Z" fill="#f0d65a"/><circle cx="26" cy="40" r="2" fill="#c7a82a"/><circle cx="38" cy="44" r="2" fill="#c7a82a"/>'),
+  rifle_body: svg('<rect x="8" y="24" width="40" height="12" fill="#34363a"/><rect x="12" y="20" width="30" height="5" fill="#45484d"/><path d="M28 36 L34 36 L32 50 L26 50 Z" fill="#5a2c12"/><path d="M38 36 L44 36 L48 48 L42 50 Z" fill="#3a3c40"/><rect x="48" y="27" width="10" height="5" fill="#2a2c30"/>'),
+  smg_body: svg('<rect x="12" y="24" width="32" height="12" fill="#34363a"/><rect x="16" y="20" width="22" height="5" fill="#45484d"/><path d="M24 36 L30 36 L28 50 L22 50 Z" fill="#6a3416"/><rect x="34" y="36" width="5" height="14" fill="#2a2c30"/><rect x="44" y="28" width="10" height="4" fill="#2a2c30"/>'),
+  rope: svg('<circle cx="32" cy="32" r="20" fill="none" stroke="#b49a64" stroke-width="7"/><circle cx="32" cy="32" r="11" fill="none" stroke="#a08550" stroke-width="6"/><path d="M48 44 L58 54" stroke="#b49a64" stroke-width="6" stroke-linecap="round"/>'),
+  rock: svg('<path d="M12 42 L18 24 L32 16 L48 22 L54 38 L44 50 L22 50 Z" fill="#a19d93"/><path d="M18 24 L32 16 L40 26 L26 34 Z" fill="#bdb9af"/>'),
+  sword: svg('<path d="M14 52 Q30 28 52 10 Q44 30 20 54 Z" fill="#d4d8dc"/><path d="M16 50 Q30 32 48 16" stroke="#9aa0a6" stroke-width="1.5" fill="none"/><rect x="8" y="46" width="14" height="5" rx="2" transform="rotate(-40 15 48)" fill="#c9a033"/><rect x="4" y="52" width="10" height="5" rx="2" transform="rotate(-40 9 54)" fill="#5a3418"/>'),
+  bow: svg('<path d="M18 6 Q52 32 18 58" fill="none" stroke="#7a4a22" stroke-width="5" stroke-linecap="round"/><path d="M18 6 L18 58" stroke="#e8e0cc" stroke-width="1.5"/><rect x="28" y="28" width="5" height="9" fill="#3a2414"/>'),
+  arrow: svg('<path d="M8 56 L52 12" stroke="#9a6a3a" stroke-width="3.5" stroke-linecap="round"/><path d="M52 12 L58 6 L54 16 Z" fill="#8a8e94"/><path d="M8 56 L6 46 L14 50 Z M8 56 L18 58 L14 50 Z" fill="#d34a2a"/>'),
+  ak: svg('<path d="M4 34 L14 31 L16 29 L40 29 L40 27 L58 27 L58 30 L62 30 L62 32 L40 32 L38 35 L33 35 L30 46 L25 47 L27 35 L21 35 L19 42 L15 42 L16 35 L13 35 L4 39 Z" fill="#2c2e32"/><path d="M4 34 L14 31 L16 35 L13 35 L4 39 Z" fill="#7a3a17"/><rect x="38" y="31" width="12" height="4" fill="#7a3a17"/>'),
+  thompson: svg('<path d="M4 33 L16 31 L18 29 L44 29 L44 31 L60 31 L60 33 L44 33 L42 36 L22 36 L20 44 L16 44 L17 36 L4 38 Z" fill="#2c2e32"/><path d="M4 33 L16 31 L17 36 L4 38 Z" fill="#7a3a17"/><rect x="34" y="36" width="5" height="12" fill="#2a2c30"/><path d="M44 33 L52 33 L50 42 L46 42 Z" fill="#7a3a17"/><path d="M46 31 L60 31" stroke="#55585e" stroke-width="2" stroke-dasharray="2 2"/>'),
+  grenade: svg('<ellipse cx="30" cy="38" rx="16" ry="18" fill="#4f5a33"/><path d="M18 30 L42 30 M16 38 L44 38 M18 46 L42 46 M30 20 L30 56" stroke="#3a4324" stroke-width="2"/><rect x="26" y="14" width="10" height="7" fill="#6a6e72"/><path d="M36 16 Q48 16 46 34" stroke="#8a8e94" stroke-width="3" fill="none"/><circle cx="22" cy="15" r="4" fill="none" stroke="#c9a033" stroke-width="2"/>'),
+  plan: svg('<rect x="10" y="8" width="44" height="48" fill="#2d5f9a"/><path d="M10 20 H54 M10 32 H54 M10 44 H54 M22 8 V56 M34 8 V56 M46 8 V56" stroke="rgba(255,255,255,.18)"/><rect x="18" y="20" width="28" height="22" fill="none" stroke="#fff" stroke-width="2"/><path d="M18 20 L32 12 L46 20" fill="none" stroke="#fff" stroke-width="2"/>'),
+  furnace: svg('<rect x="12" y="18" width="40" height="36" rx="3" fill="#8a8579"/><rect x="40" y="6" width="8" height="14" fill="#5a5650"/><rect x="20" y="32" width="24" height="14" rx="2" fill="#2a1a10"/><rect x="23" y="35" width="18" height="9" fill="#ff8a2a"/><path d="M12 26 H52 M12 52 H52" stroke="#6e6a60" stroke-width="2"/>'),
+  door: svg('<rect x="16" y="6" width="32" height="52" fill="#8c4f2e"/><rect x="16" y="14" width="32" height="4" fill="#3c3a36"/><rect x="16" y="44" width="32" height="4" fill="#3c3a36"/><circle cx="42" cy="32" r="3" fill="#2a2a28"/><path d="M22 6 V58 M30 6 V58 M38 6 V58" stroke="rgba(0,0,0,.25)"/>'),
+  lock: svg('<rect x="18" y="8" width="28" height="48" rx="3" fill="#2e3034"/><rect x="22" y="14" width="20" height="8" fill="#1a3a22"/><circle cx="38" cy="18" r="2.5" fill="#4bd36a"/><g fill="#9aa0a6"><rect x="22" y="26" width="5" height="5"/><rect x="29.5" y="26" width="5" height="5"/><rect x="37" y="26" width="5" height="5"/><rect x="22" y="34" width="5" height="5"/><rect x="29.5" y="34" width="5" height="5"/><rect x="37" y="34" width="5" height="5"/><rect x="22" y="42" width="5" height="5"/><rect x="29.5" y="42" width="5" height="5"/><rect x="37" y="42" width="5" height="5"/></g>'),
+  sbag: svg('<rect x="8" y="22" width="48" height="24" rx="10" fill="#5a6438"/><rect x="8" y="22" width="14" height="24" rx="7" fill="#8a7f5c"/><path d="M24 26 H52 M24 42 H52" stroke="#465030" stroke-width="2"/>'),
+  bagdrop: svg('<path d="M14 54 Q10 30 22 22 L42 22 Q54 30 50 54 Z" fill="#7a6644"/><path d="M22 22 Q32 10 42 22" fill="none" stroke="#5a4a30" stroke-width="4"/>'),
+};
+
+// ---------- 物品 ----------
+// hold：拿在手上時的型態（gun / melee / bow / throw / build / deploy），沒有就是不能拿在手上
+export const ITEMS = {
+  wood: { name: '木頭', stack: 1000, cat: '資源', desc: '拿石頭或刀敲樹。蓋房子、做東西、當火爐燃料都靠它' },
+  metal_ore: { name: '鐵礦', stack: 500, cat: '資源', desc: '路邊帶橘色斑點的礦石。丟進火爐燒成鐵' },
+  sulfur_ore: { name: '硫磺礦', stack: 500, cat: '資源', desc: '路邊帶黃色斑點的礦石。丟進火爐燒成硫磺' },
+  metal: { name: '鐵', stack: 1000, cat: '資源', desc: '鐵礦燒出來的。做刀、槍、門、鎖、手雷' },
+  sulfur: { name: '硫磺', stack: 1000, cat: '資源', desc: '硫磺礦燒出來的。做手雷' },
+  rifle_body: { name: '步槍槍體', stack: 1, cat: '零件', desc: '敲破路邊或超市的箱子才有機會拿到。做 AK47 用' },
+  smg_body: { name: '衝鋒槍槍體', stack: 1, cat: '零件', desc: '敲破箱子拿到。做湯姆森衝鋒槍用' },
+  rope: { name: '繩子', stack: 20, cat: '零件', desc: '敲破箱子拿到。做弓用' },
+  rock: { name: '石頭', stack: 1, cat: '工具', hold: 'melee', desc: '開局唯一的財產。敲樹、敲礦、敲人' },
+  sword: { name: '成吉思汗之刀', stack: 1, cat: '武器', hold: 'melee', desc: '彎刀，砍人很痛，採集比石頭差' },
+  bow: { name: '弓', stack: 1, cat: '武器', hold: 'bow', desc: '按住拉弓、放開射出。拉滿傷害最高，需要箭' },
+  arrow: { name: '箭', stack: 64, cat: '彈藥', desc: '弓的彈藥' },
+  ak: { name: 'AK47', stack: 1, cat: '武器', hold: 'gun', mag: 30, desc: '全自動步槍，後座力大，傷害高' },
+  thompson: { name: '湯姆森衝鋒槍', stack: 1, cat: '武器', hold: 'gun', mag: 25, desc: '射速快、好控制，傷害比 AK 低，遠距離會衰減' },
+  grenade: { name: '手雷', stack: 5, cat: '武器', hold: 'throw', desc: '左鍵丟出，3 秒後爆炸。炸人也炸房子，拆家必備' },
+  plan: { name: '建築藍圖', stack: 1, cat: '工具', hold: 'build', desc: '右鍵選要蓋的東西，左鍵蓋。每一塊都要花木頭' },
+  furnace: { name: '火爐', stack: 1, cat: '設施', hold: 'deploy', desc: '放在地上，按 E 打開。放木頭當燃料、放礦石，點火就會煉' },
+  door: { name: '一般門', stack: 1, cat: '設施', hold: 'deploy', desc: '裝在門框上，按 E 開關' },
+  lock: { name: '電子鎖', stack: 1, cat: '設施', hold: 'deploy', desc: '裝在門上，設定 4 位數密碼。沒有密碼的人打不開' },
+  sbag: { name: '睡袋', stack: 1, cat: '設施', hold: 'deploy', desc: '放在家裡，死掉之後可以從這裡重生' },
+};
+
+// ---------- 配方（內建藍圖，點了就能做） ----------
+export const RECIPES = [
+  { id: 'plan', out: 1, time: 1, cost: { wood: 10 } },
+  { id: 'furnace', out: 1, time: 5, cost: { wood: 150 } },
+  { id: 'sbag', out: 1, time: 4, cost: { wood: 60 } },
+  { id: 'sword', out: 1, time: 5, cost: { wood: 60, metal: 50 } },
+  { id: 'bow', out: 1, time: 4, cost: { wood: 80, rope: 1 } },
+  { id: 'arrow', out: 2, time: 1, cost: { wood: 5 } },
+  { id: 'thompson', out: 1, time: 8, cost: { wood: 100, metal: 100, smg_body: 1 } },
+  { id: 'ak', out: 1, time: 10, cost: { wood: 150, metal: 200, rifle_body: 1 } },
+  { id: 'grenade', out: 1, time: 3, cost: { metal: 25, sulfur: 40 } },
+  { id: 'door', out: 1, time: 5, cost: { wood: 150, metal: 50 } },
+  { id: 'lock', out: 1, time: 4, cost: { wood: 50, metal: 100 } },
+];
+export const recipeOf = (id) => RECIPES.find((r) => r.id === id);
+
+// ---------- 建築件（用建築藍圖蓋，放下去時扣木頭） ----------
+// shape：sq 方形 3m×3m、tri 正三角形邊長 3m；slot：哪一類插座（地基 / 牆 / 樓板）
+export const PIECES = {
+  found: { name: '地基', shape: 'sq', slot: 'found', cost: 100, hp: 500 },
+  tfound: { name: '三角地基', shape: 'tri', slot: 'found', cost: 50, hp: 300 },
+  wall: { name: '牆', shape: 'wall', slot: 'wall', cost: 60, hp: 400 },
+  doorway: { name: '門框', shape: 'wall', slot: 'wall', cost: 50, hp: 350 },
+  floor: { name: '地板', shape: 'sq', slot: 'floor', cost: 50, hp: 250 },
+  tfloor: { name: '三角地板', shape: 'tri', slot: 'floor', cost: 25, hp: 150 },
+  roof: { name: '屋頂', shape: 'sq', slot: 'floor', cost: 80, hp: 300 },
+  troof: { name: '三角屋頂', shape: 'tri', slot: 'floor', cost: 40, hp: 200 },
+};
+export const PIECE_ORDER = ['found', 'tfound', 'wall', 'doorway', 'floor', 'tfloor', 'roof', 'troof'];
+export const DEPLOY = {
+  furnace: { hp: 200 },
+  door: { hp: 300 },
+  lock: { hp: 0 },
+  sbag: { hp: 50 },
+};
+
+// ---------- 武器數值 ----------
+export const GUNS = {
+  ak: { dmg: 30, mult: { head: 2.0, body: 1.0, legs: 0.75 }, rpm: 450, mag: 30, reload: 3.0, recoil: 1.0, hip: 1.5, adsSpread: 0.1, falloff: [60, 200, 0.7], range: 320, pieceDmg: 2 },
+  thompson: { dmg: 22, mult: { head: 1.8, body: 1.0, legs: 0.75 }, rpm: 650, mag: 25, reload: 2.6, recoil: 0.55, hip: 1.9, adsSpread: 0.3, falloff: [30, 90, 0.55], range: 200, pieceDmg: 1.5 },
+};
+export const MELEE = {
+  rock: { dmg: 20, headMult: 1.6, swing: 0.85, hitAt: 0.3, reach: 2.4, wood: 25, ore: 30, pieceDmg: 4, crateDmg: 15 },
+  sword: { dmg: 38, headMult: 1.5, swing: 0.7, hitAt: 0.25, reach: 2.6, wood: 15, ore: 15, pieceDmg: 8, crateDmg: 25 },
+};
+export const BOW = { draw: 0.7, minSpeed: 22, maxSpeed: 52, dmg: 50, headMult: 2.0, gravity: 9.8, pieceDmg: 1, crateDmg: 20 };
+export const NADE = { fuse: 3.0, speed: 16, radius: 6, playerDmg: 95, pieceDmg: 150, pieceRadius: 5, crateDmg: 100 };
+
+// ---------- 世界資源 ----------
+export const NODE_ORE = 300;          // 一個礦點能挖多少礦石
+export const NODE_RESPAWN = 90;       // 挖完幾秒後重生
+export const CRATE = { hp: 40, max: 7, respawn: 40 };
+export const SMELT = { fuelPerSec: 1, orePerSec: 2 };
+export const MATCH_SECONDS = 30 * 60;
+export const REGEN = { delay: 12, perSec: 1 };
+
+// 箱子掉落：一次一樣東西
+export function rollLoot(rand = Math.random) {
+  const r = rand();
+  if (r < 0.17) return [{ id: 'rifle_body', n: 1 }];
+  if (r < 0.45) return [{ id: 'smg_body', n: 1 }];
+  return [{ id: 'rope', n: rand() < 0.5 ? 1 : 2 }];
+}

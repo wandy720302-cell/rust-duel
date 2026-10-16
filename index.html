@@ -28,7 +28,11 @@
   <div id="lobby" class="screen">
     <div class="menu">
       <div class="logo">RUST<span>DUEL</span></div>
-      <div class="tag">1v1 · 突擊步槍 · 先拿 5 殺的贏</div>
+      <div class="modeSel" id="modeSel">
+        <button data-mode="duel" class="on"><b>對決</b><small>一開始就有 AK，先殺 5 次的贏</small></button>
+        <button data-mode="survival"><b>生存</b><small>只有一顆石頭，自己挖、自己做、自己蓋，30 分鐘比擊殺</small></button>
+      </div>
+      <div class="tag" id="modeTag">1v1 · 突擊步槍 · 先拿 5 殺的贏</div>
 
       <label class="field">你的名字
         <input id="nameInput" maxlength="14" autocomplete="off" spellcheck="false">
@@ -53,7 +57,7 @@
 
     <div class="keys">
       <h3>操作</h3>
-      <dl>
+      <dl id="keysDuel">
         <dt>WASD</dt><dd>移動</dd>
         <dt>Shift</dt><dd>衝刺（衝刺時不能開槍）</dd>
         <dt>Space</dt><dd>跳（翻得過半截牆、爬得上疊箱）</dd>
@@ -66,7 +70,19 @@
         <dt>2</dt><dd>打針筒回血（每條命 2 支）</dd>
         <dt>Esc</dt><dd>暫停 / 設定</dd>
       </dl>
-      <p class="tip">拿石頭敲樹拿木頭，100 木頭蓋一面牆，子彈打不穿（但打久了會爛）。死掉木頭會掉光。戴耳機玩，腳步聲有方向。</p>
+      <p class="tip" id="tipDuel">拿石頭敲樹拿木頭，100 木頭蓋一面牆，子彈打不穿（但打久了會爛）。死掉木頭會掉光。戴耳機玩，腳步聲有方向。</p>
+      <dl id="keysSurv" hidden>
+        <dt>WASD</dt><dd>移動（Shift 衝刺、Space 跳、C 蹲）</dd>
+        <dt>Tab</dt><dd>背包、製作</dd>
+        <dt>E</dt><dd>撿東西、搜刮、開門、開火爐</dd>
+        <dt>1 ~ 6</dt><dd>快捷欄（滾輪也能切）</dd>
+        <dt>左鍵</dt><dd>揮、開槍、拉弓、丟手雷、蓋</dd>
+        <dt>右鍵</dt><dd>瞄準；拿藍圖時選要蓋什麼</dd>
+        <dt>R</dt><dd>換彈；拿藍圖時旋轉</dd>
+        <dt>V</dt><dd>AK 換瞄具</dd>
+        <dt>Esc</dt><dd>暫停 / 設定</dd>
+      </dl>
+      <p class="tip" id="tipSurv" hidden>開局只有一顆石頭：敲樹拿木頭、敲礦拿礦石、敲箱子拿槍的零件。死掉身上的東西全部掉在原地，誰都能撿。</p>
     </div>
     <div class="foot">非官方致敬作品 · 電腦用鍵盤滑鼠，手機橫著拿也能玩</div>
   </div>
@@ -111,6 +127,8 @@
     </div>
 
     <div id="pickups"></div>
+    <div id="interact" hidden></div>
+    <div id="craftQueue"></div>
     <div id="toast"></div>
   </div>
 
@@ -151,6 +169,10 @@
     </div>
   </div>
 
+  <div id="inv" class="screen" hidden></div>
+  <div id="keypad" class="screen center" hidden></div>
+  <div id="buildMenu" class="screen center" hidden></div>
+
   <div id="touch" hidden></div>
   <div id="rotate"><div class="phone"></div><b>把手機轉成橫的</b><small>直的拿根本沒地方放手指</small></div>
 
@@ -163,21 +185,29 @@
       </div>
       <div class="guideBody">
         <section class="lead">
-          <p><b>RUST DUEL</b> 是致敬生存遊戲《Rust》的 1v1 網頁對決。</p>
-          <p>你和朋友各是一個只穿內褲的裸男，從自己的基地睡袋上醒來，手上有一把 AK 和一顆石頭。地圖上有水泥廢墟、貨櫃、樹林和海灘。<b>先擊殺對方 5 次的人獲勝。</b></p>
+          <p><b>RUST DUEL</b> 是致敬生存遊戲《Rust》的 1v1 網頁對決。你和朋友各是一個只穿內褲的裸男，地圖上有超市廢墟、貨櫃、樹林和海灘。有兩種玩法：</p>
+          <ul>
+            <li><b>對決</b>：從自己的基地醒來，手上有一把 AK 和一顆石頭。<b>先擊殺對方 5 次的人獲勝</b></li>
+            <li><b>生存</b>：從海灘醒來，身上只有一顆石頭。自己挖礦、敲箱子找零件、做槍、蓋房子。<b>30 分鐘內擊殺比較多次的人獲勝</b></li>
+          </ul>
         </section>
+        <div class="guideTabs" id="guideTabs">
+          <button data-tab="duel" class="on">對決模式</button>
+          <button data-tab="surv">生存模式</button>
+        </div>
 
         <section>
           <h3>怎麼開始</h3>
           <ol>
+            <li>在大廳最上面選「對決」或「生存」（以建立房間的人選的為準）</li>
             <li>一個人按「建立房間」，把 6 碼房間碼或「複製邀請連結」傳給朋友</li>
             <li>朋友輸入房間碼按「加入」，或直接點邀請連結</li>
-            <li>連上就自動開打。想先熟悉手感，可以玩「單人練習」打稻草人 Bob</li>
+            <li>連上就自動開打。想先熟悉手感，可以玩「單人練習」：對決是打稻草人 Bob，生存是自己一個人挖、做、蓋</li>
           </ol>
-          <p class="note">你的基地在地圖西邊（房主）或東邊（加入的人），中間是廢墟。</p>
+          <p class="note" data-g="duel">你的基地在地圖西邊（房主）或東邊（加入的人），中間是廢墟。</p>
         </section>
 
-        <section>
+        <section data-g="duel">
           <h3>電腦操作</h3>
           <dl class="kv">
             <dt>WASD</dt><dd>移動</dd>
@@ -202,13 +232,13 @@
             <dt>右半邊</dt><dd>拖曳轉視角</dd>
             <dt>右下按鈕</dt><dd>開火、瞄準、跳、蹲、換彈、換瞄具（寫著「照門／紅點／8倍」那顆）。開火鍵按住的同時拖曳可以壓槍</dd>
             <dt>左上方</dt><dd>第二顆開火鍵，給左手用</dd>
-            <dt>快捷欄</dt><dd>點格子切換物品，點第 2 格打針筒</dd>
+            <dt>快捷欄</dt><dd>點格子切換物品（對決模式點第 2 格是打針筒）</dd>
             <dt>❚❚</dt><dd>暫停</dd>
           </dl>
           <p class="note">手機玩家有一點輔助瞄準：準心靠近對手時視角會變黏，開鏡或開火時會往對手身上吸。隔著牆不會吸。</p>
         </section>
 
-        <section>
+        <section data-g="duel">
           <h3>AK 突擊步槍</h3>
           <ul>
             <li>彈匣 30 發，全自動，換彈 3 秒</li>
@@ -220,7 +250,7 @@
           </ul>
         </section>
 
-        <section>
+        <section data-g="duel">
           <h3>石頭、木頭、木牆</h3>
           <ul>
             <li>按 <kbd>3</kbd> 拿石頭敲樹，一下 <b>+25 木頭</b>。一棵樹有 200 木頭，敲完會倒</li>
@@ -232,13 +262,129 @@
           </ul>
         </section>
 
-        <section>
+        <section data-g="duel">
           <h3>血量與重生</h3>
           <ul>
             <li>每條命有 2 支針筒：馬上 +15，之後 4 秒再慢慢回 20</li>
             <li>右下的水和食物只是 rust 氣氛，不會渴死也不會餓死</li>
             <li>死掉可以選重生點：<b>睡袋</b>（自己的基地，等 6 秒）或<b>海灘</b>（離對手最遠的那段，等 3 秒）</li>
           </ul>
+        </section>
+
+        <section data-g="surv" hidden>
+          <h3>生存模式：規則</h3>
+          <ul>
+            <li>兩個人都從海灘醒來，身上只有一顆石頭。槍要自己做，零件要去敲箱子</li>
+            <li>限時 <b>30 分鐘</b>，時間到時擊殺數多的人贏，一樣就平手。比分下面有倒數</li>
+            <li><b>死掉時身上所有東西會包成一個背包，掉在原地</b>，你跟對手都可以按 <kbd>E</kbd> 去搜刮。沒人撿的背包 5 分鐘後消失</li>
+            <li>被自己的手雷炸死不算對手的分</li>
+            <li>沒有針筒。<b>12 秒沒受傷</b>就會開始慢慢回血</li>
+            <li>有放睡袋的話，死掉可以從自己的睡袋重生（等 15 秒），不然就是海灘（等 3 秒）。蓋好的房子會一直留著</li>
+          </ul>
+        </section>
+
+        <section data-g="surv" hidden>
+          <h3>生存模式：電腦操作</h3>
+          <dl class="kv">
+            <dt>Tab</dt><dd>打開／關閉背包和製作</dd>
+            <dt>E</dt><dd>撿地上的東西、搜刮背包、開關門、打開火爐</dd>
+            <dt>1 ~ 6</dt><dd>切換快捷欄，滾輪也可以</dd>
+            <dt>左鍵</dt><dd>揮石頭／刀、開槍、拉弓（按住拉、放開射）、丟手雷、蓋東西</dd>
+            <dt>右鍵</dt><dd>拿槍或弓時瞄準；拿建築藍圖時打開「要蓋什麼」選單</dd>
+            <dt>R</dt><dd>換彈；拿藍圖、火爐、睡袋時旋轉方向</dd>
+            <dt>V</dt><dd>AK 換瞄具</dd>
+            <dt>WASD 等</dt><dd>移動、衝刺、跳、蹲跟對決一樣</dd>
+          </dl>
+          <p class="note">手機：右邊多了「背包」鍵，看著可以互動的東西時會出現「E」；拿藍圖時多了「選擇」和「轉」。背包裡點一格、再點另一格就能搬東西。</p>
+        </section>
+
+        <section data-g="surv" hidden>
+          <h3>生存模式：採集</h3>
+          <ul>
+            <li><b>樹</b>：石頭一下 +25 木頭，刀一下 +15。一棵 200 木頭，敲完會倒</li>
+            <li><b>礦點</b>：路邊成排的大石頭。帶<span class="ore">橘色斑點</span>的是鐵礦、帶<span class="sul">黃色斑點</span>的是硫磺礦。石頭一下 +30，刀一下 +15。一個礦點 300，挖光 90 秒後長回來</li>
+            <li><b>箱子</b>：黃黑條紋的木箱，會出現在超市裡、超市屋頂、停車場和路邊。打破會掉一樣東西：<b>步槍槍體</b>（17%）、<b>衝鋒槍槍體</b>（28%）或<b>繩子</b>（其他）。地圖上最多 7 個，每 40 秒補一個</li>
+            <li>礦石要丟進<b>火爐</b>燒才會變成鐵和硫磺</li>
+          </ul>
+        </section>
+
+        <section data-g="surv" hidden>
+          <h3>生存模式：背包和製作</h3>
+          <ul>
+            <li>背包 24 格、快捷欄 6 格。拖曳搬東西，右鍵或雙擊直接搬到另一邊，拖到視窗外面就是丟在地上</li>
+            <li>左邊是內建藍圖：點一下看要什麼材料，按「製作」就開始做。可以一次排好幾個，做的時候不用開著背包，右下會顯示進度；點佇列可以取消，材料退回來</li>
+          </ul>
+          <table class="gtbl">
+            <tr><th>東西</th><th>材料</th><th>時間</th></tr>
+            <tr><td>建築藍圖</td><td>10 木頭</td><td>1 秒</td></tr>
+            <tr><td>火爐</td><td>150 木頭</td><td>5 秒</td></tr>
+            <tr><td>睡袋</td><td>60 木頭</td><td>4 秒</td></tr>
+            <tr><td>成吉思汗之刀</td><td>60 木頭 + 50 鐵</td><td>5 秒</td></tr>
+            <tr><td>弓</td><td>80 木頭 + 1 繩子</td><td>4 秒</td></tr>
+            <tr><td>箭 ×2</td><td>5 木頭</td><td>1 秒</td></tr>
+            <tr><td>湯姆森衝鋒槍</td><td>100 木頭 + 100 鐵 + 衝鋒槍槍體</td><td>8 秒</td></tr>
+            <tr><td>AK47</td><td>150 木頭 + 200 鐵 + 步槍槍體</td><td>10 秒</td></tr>
+            <tr><td>手雷</td><td>25 鐵 + 40 硫磺</td><td>3 秒</td></tr>
+            <tr><td>一般門</td><td>150 木頭 + 50 鐵</td><td>5 秒</td></tr>
+            <tr><td>電子鎖</td><td>50 木頭 + 100 鐵</td><td>4 秒</td></tr>
+          </table>
+          <p class="note">槍不用做子彈，彈匣打完按 R 換就好。</p>
+        </section>
+
+        <section data-g="surv" hidden>
+          <h3>生存模式：火爐</h3>
+          <ul>
+            <li>拿著火爐對著平地左鍵放下去，走過去按 <kbd>E</kbd> 打開</li>
+            <li>最上面一格放<b>木頭</b>當燃料，中間兩格放<b>鐵礦或硫磺礦</b>，按「點火」</li>
+            <li>每秒燒 1 木頭，每格礦石每秒煉 2 個，成品出現在下面三格，按「全部拿走」</li>
+            <li>沒燃料或沒礦石就會自己熄火。火爐只有房主那邊在算，兩個人看到的會一樣</li>
+          </ul>
+        </section>
+
+        <section data-g="surv" hidden>
+          <h3>生存模式：蓋房子</h3>
+          <ul>
+            <li>做一張<b>建築藍圖</b>（10 木頭）拿在手上，右鍵選要蓋什麼，左鍵蓋。木頭在蓋下去的時候才扣</li>
+            <li><b>地基</b>（方形 3×3 公尺）可以蓋在任何不太斜的空地上，<kbd>R</kbd> 轉方向；靠近別的地基會自動吸附在旁邊。<b>三角地基</b>接在方形地基的邊上</li>
+            <li><b>牆</b>、<b>門框</b>蓋在地基或地板的邊上，高 3 公尺</li>
+            <li><b>地板</b>、<b>屋頂</b>蓋在牆頂高度（地基正上方 3 公尺），也能接在別的地板旁邊往外延伸。三角的接在三角的上面或方形的旁邊</li>
+            <li>綠色預覽是可以蓋，紅色不行，下面會寫原因。每人最多 120 塊</li>
+          </ul>
+          <table class="gtbl">
+            <tr><th>建築</th><th>木頭</th><th>耐久</th></tr>
+            <tr><td>地基</td><td>100</td><td>500</td></tr>
+            <tr><td>三角地基</td><td>50</td><td>300</td></tr>
+            <tr><td>牆</td><td>60</td><td>400</td></tr>
+            <tr><td>門框</td><td>50</td><td>350</td></tr>
+            <tr><td>地板</td><td>50</td><td>250</td></tr>
+            <tr><td>三角地板</td><td>25</td><td>150</td></tr>
+            <tr><td>屋頂</td><td>80</td><td>300</td></tr>
+            <tr><td>三角屋頂</td><td>40</td><td>200</td></tr>
+          </table>
+        </section>
+
+        <section data-g="surv" hidden>
+          <h3>生存模式：門、電子鎖、睡袋</h3>
+          <ul>
+            <li><b>一般門</b>：拿著門對準門框左鍵裝上去，按 <kbd>E</kbd> 開關。門有 300 耐久</li>
+            <li><b>電子鎖</b>：拿著鎖對準門左鍵，先設 4 位數密碼，按確定才會裝上去（取消不會扣掉鎖）</li>
+            <li>上鎖的門，別人按 <kbd>E</kbd> 要輸入密碼，猜對才進得去，之後就一直有權限。燈是綠的代表你能開，紅的代表要密碼</li>
+            <li><b>睡袋</b>：放在家裡，死掉之後可以從這裡重生。睡袋很脆（50 耐久），藏好</li>
+          </ul>
+        </section>
+
+        <section data-g="surv" hidden>
+          <h3>生存模式：武器</h3>
+          <table class="gtbl">
+            <tr><th>武器</th><th>傷害</th><th>特色</th></tr>
+            <tr><td>石頭</td><td>20，爆頭 32</td><td>開局就有，採集最快</td></tr>
+            <tr><td>成吉思汗之刀</td><td>38，爆頭 57</td><td>揮得比石頭快，砍人很痛，採集比較差</td></tr>
+            <tr><td>弓</td><td>拉滿 50，爆頭 100</td><td>按住拉弓、放開射。箭會往下掉，拉越滿飛越快越準</td></tr>
+            <tr><td>湯姆森衝鋒槍</td><td>22，爆頭 ×1.8</td><td>650 RPM、25 發、好壓；30 公尺外傷害開始變低</td></tr>
+            <tr><td>AK47</td><td>30，爆頭 ×2</td><td>450 RPM、30 發、後座力大；可以換瞄具</td></tr>
+            <tr><td>手雷</td><td>最高 95</td><td>左鍵丟出，3 秒後爆，半徑 6 公尺；隔著牆傷害只剩 1/4</td></tr>
+          </table>
+          <p class="note">拆家：手雷對 5 公尺內的建築最多扣 150，是最快的拆法。槍、刀、石頭、箭也打得爛，只是很慢（AK 一發 2、湯姆森 1.5、石頭 4、刀 8、箭 1）。</p>
         </section>
 
         <section>

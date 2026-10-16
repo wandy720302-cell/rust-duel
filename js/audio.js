@@ -116,6 +116,63 @@ export function createAudio() {
         d[i] = (lp * 2 + Math.sin(2 * Math.PI * 75 * t) * 0.8) * Math.exp(-t * 28);
       }
     });
+    // 湯姆森：比 AK 短、比較脆
+    buf.smg = noise(0.55, (d, sr) => {
+      let lp = 0, lp2 = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.12; lp2 += (n - lp2) * 0.03;
+        const crack = n * Math.exp(-t * 90);
+        const thump = Math.sin(2 * Math.PI * (130 - 50 * t) * t) * Math.exp(-t * 24) * 0.7;
+        d[i] = Math.tanh((crack + thump + lp * Math.exp(-t * 20) * 2 + lp2 * Math.exp(-t * 6) * 1.6) * 1.3) * 0.85;
+      }
+    });
+    // 弓弦：低頻撥弦 + 一點擦過的雜訊
+    buf.twang = noise(0.5, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = (Math.sin(2 * Math.PI * 105 * t) * 0.6 + Math.sin(2 * Math.PI * 210 * t) * 0.25) * Math.exp(-t * 9) + (Math.random() - 0.5) * 0.5 * Math.exp(-t * 60);
+      }
+    });
+    buf.thunk = noise(0.2, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.2;
+        d[i] = (lp * 1.5 + Math.sin(2 * Math.PI * 160 * t) * 0.6) * Math.exp(-t * 35);
+      }
+    });
+    // 爆炸：低頻轟 + 長長的碎裂尾音
+    buf.boom = noise(2.4, (d, sr) => {
+      let lp = 0, lp2 = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.05; lp2 += (n - lp2) * 0.01;
+        const crack = n * Math.exp(-t * 30) * 0.9;
+        const body = Math.sin(2 * Math.PI * (55 - 20 * t) * t) * Math.exp(-t * 3.5) * 1.2;
+        d[i] = Math.tanh((crack + body + lp * Math.exp(-t * 4) * 3 + lp2 * Math.exp(-t * 1.6) * 4) * 1.5) * 0.95;
+      }
+    });
+    // 門：鉸鏈吱一聲 + 碰到門框
+    buf.door = noise(0.6, (d, sr) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        ph += 2 * Math.PI * (420 + 260 * Math.sin(t * 9)) / sr;
+        const creak = Math.sign(Math.sin(ph)) * 0.08 * Math.exp(-((t - 0.18) ** 2) * 40);
+        const hit = (Math.random() - 0.5) * 0.9 * Math.exp(-Math.max(0, t - 0.42) * 40) * (t > 0.42 ? 1 : 0);
+        d[i] = creak + hit + Math.sin(2 * Math.PI * 90 * t) * 0.5 * (t > 0.42 ? Math.exp(-(t - 0.42) * 25) : 0);
+      }
+    });
+    buf.beep = noise(0.12, (d, sr) => { for (let i = 0; i < d.length; i++) { const t = i / sr; d[i] = Math.sin(2 * Math.PI * 1320 * t) * 0.4 * (t < 0.1 ? 1 : 0); } });
+    buf.buzz = noise(0.3, (d, sr) => { for (let i = 0; i < d.length; i++) { const t = i / sr; d[i] = Math.sign(Math.sin(2 * Math.PI * 180 * t)) * 0.18 * (t < 0.25 ? 1 : 0); } });
+    buf.chime = noise(0.5, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = (Math.sin(2 * Math.PI * 880 * t) * 0.3 + Math.sin(2 * Math.PI * 1320 * t) * 0.2) * Math.exp(-t * 7);
+      }
+    });
+    buf.pop = noise(0.08, (d, sr) => { for (let i = 0; i < d.length; i++) { const t = i / sr; d[i] = Math.sin(2 * Math.PI * (500 - 2500 * t) * t) * 0.5 * Math.exp(-t * 40); } });
     buf.inject = noise(0.5, (d, sr) => {
       for (let i = 0; i < d.length; i++) {
         const t = i / sr;
@@ -183,7 +240,15 @@ export function createAudio() {
       }
     },
     shot() { play('shot', { gain: 0.55, rate: 0.96 + Math.random() * 0.08 }); },
-    shotAt(pos, dist) { play('shot', { gain: 1.4, rate: 0.94 + Math.random() * 0.08, at: pos, dist }); },
+    shotAt(pos, dist, kind) { play(kind === 'thompson' ? 'smg' : 'shot', { gain: 1.4, rate: 0.94 + Math.random() * 0.08, at: pos, dist }); },
+    smg() { play('smg', { gain: 0.5, rate: 0.96 + Math.random() * 0.08 }); },
+    twang(at, dist) { play('twang', { gain: at ? 1.2 : 0.6, rate: 0.95 + Math.random() * 0.1, at, dist }); },
+    thunk(at, dist) { play('thunk', { gain: at ? 1.0 : 0.6, rate: 0.9 + Math.random() * 0.2, at, dist }); },
+    boom(at, dist) { play('boom', { gain: 1.8, rate: 0.95 + Math.random() * 0.1, at, dist: Math.max(0, (dist || 0) - 20) }); },
+    door(at, dist) { play('door', { gain: at ? 1.1 : 0.7, rate: 0.95 + Math.random() * 0.1, at, dist }); },
+    beep(ok = true) { play(ok ? 'beep' : 'buzz', { gain: 0.6 }); if (ok) play('beep', { gain: 0.5, rate: 1.25, when: 0.13 }); },
+    chime() { play('chime', { gain: 0.5 }); },
+    pop() { play('pop', { gain: 0.5, rate: 0.9 + Math.random() * 0.2 }); },
     step(loud = 1) { play('step', { gain: 0.16 * loud, rate: 0.85 + Math.random() * 0.3 }); },
     stepAt(pos, dist, loud = 1) { play('step', { gain: 1.1 * loud, rate: 0.85 + Math.random() * 0.3, at: pos, dist }); },
     hit(head) { play(head ? 'head' : 'hit', { gain: head ? 0.55 : 0.5 }); },

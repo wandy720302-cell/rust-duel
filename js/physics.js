@@ -3,6 +3,7 @@
 //   box  { min, max }                         軸對齊盒（建築、箱子）
 //   cyl  { x, z, r, y0, y1 }                  直立圓柱（樹幹、岩石、油桶）
 //   obox { cx, cz, hx, hz, ax, az, y0, y1 }   可任意轉角度的盒子（玩家蓋的木牆），(ax, az) 是本地 x 軸方向
+//   tri  { p: [[x,z]×3], y0, y1 }             直立的三角柱（三角地基、三角地板）
 import { heightAt, BOUNDS, WATER_Y } from './world.js';
 
 export const RADIUS = 0.38;
@@ -45,23 +46,54 @@ export function oboxDist2(c, x, z) {
   return ex * ex + ez * ez;
 }
 
+// 三角形：點在不在裡面、點到三角形的最近點
+export function pointInTri(x, z, p) {
+  const [a, b, c] = p;
+  const d1 = (x - b[0]) * (a[1] - b[1]) - (a[0] - b[0]) * (z - b[1]);
+  const d2 = (x - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (z - c[1]);
+  const d3 = (x - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (z - a[1]);
+  const neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
+  return !(neg && pos);
+}
+function nearestOnTriEdge(x, z, p) {
+  let best = Infinity, bx = 0, bz = 0;
+  for (let i = 0; i < 3; i++) {
+    const [ax, az] = p[i], [cx, cz] = p[(i + 1) % 3];
+    const dx = cx - ax, dz = cz - az;
+    const t = clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1);
+    const qx = ax + dx * t, qz = az + dz * t, d = Math.hypot(x - qx, z - qz);
+    if (d < best) { best = d; bx = qx; bz = qz; }
+  }
+  return [best, bx, bz];
+}
+export function triDist(x, z, p) { return pointInTri(x, z, p) ? 0 : nearestOnTriEdge(x, z, p)[0]; }
+
+// 腳底踩得到的東西（r：腳掌半徑）
+function under(c, x, z, r) {
+  if (c.type === 'box') return footOverlapBox(c, x, z, r);
+  if (c.type === 'cyl') return Math.hypot(x - c.x, z - c.z) < c.r + r * 0.5;
+  if (c.type === 'obox') return oboxDist2(c, x, z) < r * r;
+  return triDist(x, z, c.p) < r;
+}
+const topOf = (c) => (c.type === 'box' ? c.max[1] : c.y1);
+const bottomOf = (c) => (c.type === 'box' ? c.min[1] : c.y0);
+
 function groundAt(x, z, maxTop, cols) {
   let g = heightAt(x, z);
   for (const c of cols) {
-    if (c.type === 'box') {
-      const top = c.max[1];
-      if (top > g && top <= maxTop && footOverlapBox(c, x, z, FOOT)) g = top;
-    } else if (c.type === 'cyl') {
-      if (c.y1 > g && c.y1 <= maxTop && Math.hypot(x - c.x, z - c.z) < c.r + FOOT * 0.5) g = c.y1;
-    } else if (c.y1 > g && c.y1 <= maxTop && oboxDist2(c, x, z) < FOOT * FOOT) g = c.y1;
+    const top = topOf(c);
+    if (top > g && top <= maxTop && under(c, x, z, FOOT)) g = top;
   }
   return g;
 }
 
+// 頭頂上方最低的東西（樓板、屋頂、天花板）；圓柱不算（樹枝不擋頭）
 function ceilingAt(x, z, minBottom, cols) {
   let c0 = Infinity;
   for (const c of cols) {
-    if (c.type === 'box' && c.min[1] >= minBottom && c.min[1] < c0 && footOverlapBox(c, x, z, RADIUS * 0.9)) c0 = c.min[1];
+    if (c.type === 'cyl') continue;
+    const b = bottomOf(c);
+    if (b >= minBottom && b < c0 && under(c, x, z, RADIUS * 0.9)) c0 = b;
   }
   return c0;
 }
@@ -95,6 +127,17 @@ function resolveXZ(b, cols, stepH) {
       const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), min = RADIUS + c.r;
       if (d >= min || d < 1e-6) continue;
       push(p, v, dx / d, dz / d, min - d);
+    } else if (c.type === 'tri') {
+      if (c.y1 <= p.y + stepH || c.y0 >= p.y + b.h) continue;
+      const inside = pointInTri(p.x, p.z, c.p);
+      const [d, qx, qz] = nearestOnTriEdge(p.x, p.z, c.p);
+      if (!inside) {
+        if (d >= RADIUS || d < 1e-9) continue;
+        push(p, v, (p.x - qx) / d, (p.z - qz) / d, RADIUS - d);
+      } else if (d > 1e-9) {
+        // 圓心跑進三角形：從最近的邊推出去
+        push(p, v, (qx - p.x) / d, (qz - p.z) / d, d + RADIUS);
+      }
     } else {
       if (c.y1 <= p.y + stepH || c.y0 >= p.y + b.h) continue;
       const [lx, lz] = oboxLocal(c, p.x, p.z);
@@ -118,8 +161,9 @@ function resolveXZ(b, cols, stepH) {
 
 function blockedAbove(b, cols) {
   for (const c of cols) {
-    if (c.type !== 'box') continue;
-    if (c.min[1] > b.pos.y + b.h - 0.05 && c.min[1] < b.pos.y + STAND_H + 0.02 && footOverlapBox(c, b.pos.x, b.pos.z, RADIUS * 0.9)) return true;
+    if (c.type === 'cyl') continue;
+    const bot = bottomOf(c);
+    if (bot > b.pos.y + b.h - 0.05 && bot < b.pos.y + STAND_H + 0.02 && under(c, b.pos.x, b.pos.z, RADIUS * 0.9)) return true;
   }
   return false;
 }
