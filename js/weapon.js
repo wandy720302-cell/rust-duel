@@ -293,6 +293,35 @@ export function buildGrenade() {
   return { group: g };
 }
 
+// 槌子：木柄 + 鐵頭
+export function buildHammer() {
+  const g = new THREE.Group();
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.26, 8).translate(0, 0.08, 0), new THREE.MeshStandardMaterial({ color: '#8a6038', roughness: 0.85 }));
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.04, 0.04).translate(0, 0.215, 0), new THREE.MeshStandardMaterial({ color: '#5c6066', roughness: 0.4, metalness: 0.7 }));
+  const claw = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.03, 0.03).translate(-0.065, 0.225, 0), head.material);
+  claw.rotation.z = 0.25;
+  for (const m of [handle, head, claw]) m.castShadow = true;
+  g.add(handle, head, claw);
+  return { group: g };
+}
+
+// C4：一塊土黃色炸藥、兩圈膠帶、上面一個計時器（紅燈會閃）
+export function buildC4() {
+  const g = new THREE.Group();
+  const brick = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.045, 0.07), new THREE.MeshStandardMaterial({ color: '#c9b27c', roughness: 0.85 }));
+  const tapeMat = new THREE.MeshStandardMaterial({ color: '#34342f', roughness: 0.6 });
+  const tapes = [-0.03, 0.03].map((x) => { const t = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.048, 0.073), tapeMat); t.position.x = x; return t; });
+  const timer = new THREE.Mesh(new THREE.BoxGeometry(0.038, 0.016, 0.028), new THREE.MeshStandardMaterial({ color: '#202226', roughness: 0.4, metalness: 0.4 }));
+  timer.position.y = 0.03;
+  const led = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.005, 0.008), new THREE.MeshBasicMaterial({ color: '#ff3b2a' }));
+  led.position.set(0.01, 0.04, 0);
+  const wire = new THREE.Mesh(new THREE.TorusGeometry(0.02, 0.0022, 4, 10, Math.PI), new THREE.MeshStandardMaterial({ color: '#c43c2c', roughness: 0.5 }));
+  wire.position.set(-0.02, 0.035, 0); wire.rotation.y = Math.PI / 2;
+  for (const m of [brick, ...tapes, timer, wire]) m.castShadow = true;
+  g.add(brick, ...tapes, timer, led, wire);
+  return { group: g, led };
+}
+
 // 一塊熊肉（帶一截骨頭）；cooked：烤過的焦褐色
 export function buildMeat(cooked = false) {
   const g = new THREE.Group();
@@ -391,6 +420,16 @@ export function createViewmodel(T, skin = '#c99d7a') {
   block(rockRig, 0.07, 0.06, 0.09, 0.01, -0.035, 0.02);
   limb(rockRig, [0.02, -0.05, 0.05], [0.09, -0.2, 0.36], 0.065, 0.06);
 
+  // --- 槌子 ---
+  const hammerRig = new THREE.Group();
+  holder.add(hammerRig);
+  const hammer = buildHammer();
+  hammer.group.rotation.x = 0.5;
+  hammer.group.position.set(0, -0.03, 0.02);
+  hammerRig.add(hammer.group);
+  block(hammerRig, 0.06, 0.06, 0.09, 0, -0.01, 0.05);
+  limb(hammerRig, [0.01, -0.03, 0.08], [0.1, -0.22, 0.4], 0.065, 0.06);
+
   // --- 成吉思汗之刀 ---
   const swordRig = new THREE.Group();
   holder.add(swordRig);
@@ -418,6 +457,14 @@ export function createViewmodel(T, skin = '#c99d7a') {
   nadeRig.add(nade.group);
   block(nadeRig, 0.07, 0.06, 0.09, 0.01, -0.04, 0.02);
   limb(nadeRig, [0.02, -0.05, 0.05], [0.09, -0.2, 0.36], 0.065, 0.06);
+  // --- C4（跟手雷一樣用丟的）---
+  const c4Rig = new THREE.Group();
+  holder.add(c4Rig);
+  const c4m = buildC4();
+  c4m.group.rotation.set(0.3, 0.4, 0);
+  c4Rig.add(c4m.group);
+  block(c4Rig, 0.07, 0.06, 0.09, 0.01, -0.045, 0.03);
+  limb(c4Rig, [0.02, -0.05, 0.06], [0.09, -0.2, 0.36], 0.065, 0.06);
 
   // --- 建築藍圖（也拿來代表手上的設施：火爐、門、鎖、睡袋） ---
   const planRig = new THREE.Group();
@@ -439,7 +486,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
   };
   const meatRig = handRig(buildMeat(false).group), cookedRig = handRig(buildMeat(true).group), bandageRig = handRig(buildBandage().group);
 
-  const rigs = { ak: guns.ak.rig, thompson: guns.thompson.rig, rock: rockRig, sword: swordRig, bow: bowRig, grenade: nadeRig, plan: planRig, meat: meatRig, cooked: cookedRig, bandage: bandageRig, none: null };
+  const rigs = { ak: guns.ak.rig, thompson: guns.thompson.rig, rock: rockRig, sword: swordRig, bow: bowRig, grenade: nadeRig, c4: c4Rig, hammer: hammerRig, plan: planRig, meat: meatRig, cooked: cookedRig, bandage: bandageRig, none: null };
 
   // 開鏡時讓「照門缺口 → 準星」這條線剛好落在畫面正中央
   const POSE = {
@@ -448,9 +495,11 @@ export function createViewmodel(T, skin = '#c99d7a') {
     sprint: { p: [0.1, -0.15, -0.22], r: [-0.35, 0.7, 0.25] },
     down: { p: [0.12, -0.42, -0.22], r: [-0.6, 0.2, 0] },
     rock: { p: [0.17, -0.17, -0.3], r: [0.15, -0.35, 0.1] },
+    hammer: { p: [0.17, -0.18, -0.3], r: [0.1, -0.3, 0.1] },
     sword: { p: [0.17, -0.19, -0.3], r: [0.1, -0.3, 0.12] },
     bow: { p: [-0.04, -0.03, -0.42], r: [0, 0.1, 0] },
     grenade: { p: [0.16, -0.15, -0.3], r: [0.1, -0.2, 0] },
+    c4: { p: [0.16, -0.15, -0.3], r: [0.15, -0.25, 0] },
     plan: { p: [0.13, -0.115, -0.3], r: [0.05, -0.25, 0] },
     meat: { p: [0.16, -0.15, -0.3], r: [0.1, -0.3, 0] },
     cooked: { p: [0.16, -0.15, -0.3], r: [0.1, -0.3, 0] },
@@ -572,9 +621,10 @@ export function createViewmodel(T, skin = '#c99d7a') {
         st.toss += dt / 0.55;
         const back = bump(st.toss, 0, 0.35, 0.4, 0.5), fwd = bump(st.toss, 0.4, 0.55, 0.6, 1);
         p.z += 0.12 * back - 0.2 * fwd; p.y += 0.08 * back; r.x += 0.6 * back - 0.9 * fwd;
-        nade.group.visible = st.toss < 0.5;
+        nade.group.visible = c4m.group.visible = st.toss < 0.5;
         if (st.toss >= 1) st.toss = -1;
-      } else nade.group.visible = o.hasNade !== false;
+      } else nade.group.visible = c4m.group.visible = o.hasNade !== false;
+      c4m.led.visible = Math.floor(performance.now() / 400) % 2 === 0;
       // 吃東西、包紮：拿到面前，邊咬邊上下動
       if (st.use >= 0) {
         st.use += dt / st.useDur;

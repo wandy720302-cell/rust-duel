@@ -17,6 +17,8 @@ const PIECE_ICON = {
   floor: '<svg viewBox="0 0 64 64"><path d="M8 32 L32 20 L56 32 L32 44 Z" fill="#a8885e"/><path d="M14 29 L38 41 M20 26 L44 38 M26 23 L50 35" stroke="#7a5c3a" stroke-width="1.5"/></svg>',
   tfloor: '<svg viewBox="0 0 64 64"><path d="M10 40 L32 22 L54 40 Z" fill="#a8885e"/><path d="M18 34 L46 34 M24 28 L40 28" stroke="#7a5c3a" stroke-width="1.5"/></svg>',
   roof: '<svg viewBox="0 0 64 64"><path d="M6 44 L32 14 L58 44 Z" fill="#8f7a60"/><path d="M32 14 L32 44 M19 29 L45 29" stroke="#6a5844" stroke-width="2"/></svg>',
+  window: '<svg viewBox="0 0 64 64"><path d="M12 10 H52 V54 H12 Z M20 24 V38 H44 V24 Z" fill="#8a6a46" fill-rule="evenodd"/><rect x="20" y="24" width="24" height="14" fill="#a9cfe0" opacity=".7"/><path d="M32 24 V38 M20 24 H44 V38 H20 Z" stroke="#3a3a36" stroke-width="2" fill="none"/></svg>',
+  stairs: '<svg viewBox="0 0 64 64"><path d="M10 54 V46 H20 V38 H30 V30 H40 V22 H50 V14 H56 V54 Z" fill="#a8885e"/><path d="M10 46 H20 M20 38 H30 M30 30 H40 M40 22 H50" stroke="#7a5c3a" stroke-width="2"/></svg>',
   troof: '<svg viewBox="0 0 64 64"><path d="M12 46 L32 16 L52 46 Z" fill="#8f7a60"/><path d="M32 16 L26 46" stroke="#6a5844" stroke-width="2"/></svg>',
 };
 
@@ -95,7 +97,7 @@ export function createInvUI({ surv, audio, onClose, isTouch }) {
     if (!c) { panel.hidden = true; return; }
     panel.hidden = false;
     const isFurn = surv.sv.furn.has(c.id);
-    $('contTitle').textContent = isFurn ? '火爐' : c.kind === 'bag' ? '掉落的背包' : '地上的東西';
+    $('contTitle').textContent = isFurn ? '火爐' : surv.sv.boxes.has(c.id) ? '木箱' : c.kind === 'bag' ? '掉落的背包' : '地上的東西';
     if (isFurn) {
       const s = (j, label) => `<div class="fslot"><small>${label}</small>${slotHtml('cont', j, c.slots[j])}</div>`;
       setHTML($('contBody'), `<div class="furnace">

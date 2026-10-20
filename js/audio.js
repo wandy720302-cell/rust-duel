@@ -273,10 +273,12 @@ export function createAudio() {
     src.start(ctx.currentTime + when);
   }
 
-  return {
+  const api = {
+    listenerPos: null,
     unlock: ensure,
     setVolume(v) { volume = v; if (master) master.gain.value = v; },
     setListener(pos, fwd) {
+      api.listenerPos = pos;
       if (!ctx) return;
       const L = ctx.listener;
       if (L.positionX) {
@@ -311,6 +313,8 @@ export function createAudio() {
     },
     inject() { play('inject', { gain: 0.8 }); play('click', { gain: 0.4, rate: 1.4, when: 0.05 }); },
     eat() { play('eat', { gain: 0.7, rate: 0.95 + Math.random() * 0.1 }); },
+    // C4：有方向的短嗶聲（對方聽得到你家牆上被黏了一顆）
+    c4beep(at) { play('beep', { gain: 1.4, rate: 1.35, at, dist: at && api.listenerPos ? at.distanceTo(api.listenerPos) : 0 }); },
     bandage() { play('bandage', { gain: 0.6 }); },
     roar(at, dist) { play('roar', { gain: 1.7, rate: 0.9 + Math.random() * 0.15, at, dist }); },
     growl(at, dist) { play('growl', { gain: 1.1, rate: 0.85 + Math.random() * 0.2, at, dist }); },
@@ -325,4 +329,5 @@ export function createAudio() {
     // 蓋牆：連敲三下槌子
     build(at, dist) { for (let i = 0; i < 3; i++) play('chop', { gain: at ? 1 : 0.6, rate: 1.3 + i * 0.05, at, dist, when: i * 0.12 }); },
   };
+  return api;
 }

@@ -813,7 +813,7 @@ function updateWeaponSurv(dt) {
     S.tossT += dt;
     if (S.tossT >= 0.28) {
       S.tossT = -1;
-      if (surv.held()?.id === 'grenade') {
+      if (surv.held()?.id === 'grenade' || surv.held()?.id === 'c4') {
         surv.throwNade(camera.position.clone().add(survHost.forwardFlat().multiplyScalar(0.4)), survHost.aimDir());
         if (S.online) net.send({ t: 'sw', dur: 0.55 });
       }
@@ -1320,7 +1320,7 @@ function updatePlay(dt, now) {
     dt, ads: S.ads, sprint: S.sprinting && S.speed > 3, speed: S.speed, onGround: b.onGround,
     reload: S.reload >= 0 ? 1 - S.reload / S.reloadTotal : -1,
     down: S.inject >= 0, mdx: S.mdx, mdy: S.mdy,
-    bowDraw: S.bowDraw, hasArrow: S.gameMode === 'survival' && surv.count('arrow') > 0, hasNade: S.gameMode !== 'survival' || surv.held()?.id === 'grenade',
+    bowDraw: S.bowDraw, hasArrow: S.gameMode === 'survival' && surv.count('arrow') > 0, hasNade: S.gameMode !== 'survival' || surv.held()?.id === 'grenade' || surv.held()?.id === 'c4',
   });
 
   hud.health(S.hp);
@@ -1330,6 +1330,7 @@ function updatePlay(dt, now) {
     if (gunNow) { const ammoId = GUNS[S.item].ammo; hud.ammo(S.ammo, surv.count(ammoId), S.reload >= 0, ITEM_DEFS[ammoId].name); }
     else if (S.item === 'bow') hud.ammo(surv.count('arrow'), null, false, '箭');
     else if (S.item === 'grenade') hud.ammo(surv.count('grenade'), null, false, '手雷');
+    else if (S.item === 'c4') hud.ammo(surv.count('c4'), null, false, 'C4');
     else hud.ammo(null);
   } else hud.ammo(S.ammo, AK.mag, S.reload >= 0);
   hud.compass(S.yaw);
@@ -1361,7 +1362,7 @@ function updateSurvival(dt, now) {
         if (a.mine) surv.hitThings(wh, { piece: BOW.pieceDmg, crate: BOW.crateDmg, deploy: BOW.pieceDmg, bear: BOW.dmg * a.power });
       }
     },
-    onNadeBoom: (n) => { surv.explode(n.pos.clone(), true); surv.sendBoom(n.id, n.pos); },
+    onNadeBoom: (n) => { surv.explode(n.pos.clone(), true, n.type); surv.sendBoom(n.id, n.pos, n.type); },
   });
   const kind = surv.holdKind();
   if (S.alive && !S.matchOver && (kind === 'build' || kind === 'deploy')) {

@@ -5,7 +5,8 @@
 //     兩個人同時搶同一件東西也不會變成兩件。
 //   - 鐵桶刷新、礦點重生、火爐冶煉都由房主決定。單人模式自己就是房主。
 import * as THREE from 'three';
-import { ITEMS, RECIPES, recipeOf, PIECES, DEPLOY, MELEE, GUNS, NADE, CRATE, NODE_RESPAWN, MATCH_SECONDS, BEAR, rollLoot, falloffMult } from './items.js';
+import { UPGRADE } from './items.js';
+import { ITEMS, RECIPES, recipeOf, PIECES, DEPLOY, MELEE, GUNS, NADE as NADE_DEF, C4, CRATE, NODE_RESPAWN, MATCH_SECONDS, BEAR, rollLoot, falloffMult } from './items.js';
 import { createBears } from './bears.js';
 import { rng } from './textures.js';
 import * as INV from './inventory.js';
@@ -19,7 +20,7 @@ export function createSurvival(env) {
 
   const sv = {
     inv: INV.createInv(), hotIdx: 0, queue: [],
-    crates: new Map(), drops: new Map(), furn: new Map(), sbags: new Map(),
+    crates: new Map(), drops: new Map(), furn: new Map(), sbags: new Map(), boxes: new Map(),
     nodeTimers: new Map(), crateTimer: 0, crateN: 0, idN: 0, reqN: 0, pending: new Map(),
     buildType: 'found', rot: 0, endAt: 0, openCont: null, lookAt: 0, target: null, lastHurt: -1e9,
     listeners: new Set(),
@@ -76,7 +77,7 @@ export function createSurvival(env) {
     const h = ITEMS[it.id]?.hold;
     if (h === 'gun' || h === 'melee') return it.id;
     if (h === 'bow') return 'bow';
-    if (h === 'throw') return 'grenade';
+    if (h === 'throw') return it.id === 'c4' ? 'c4' : 'grenade';
     if (h === 'build' || h === 'deploy') return 'plan';
     if (h === 'eat') return it.id === 'cooked_meat' ? 'cooked' : 'meat';
     if (h === 'heal') return 'bandage';
@@ -162,7 +163,8 @@ export function createSurvival(env) {
   }
 
   // ---------- 容器存取（房主裁決） ----------
-  const contOf = (id) => sv.drops.get(id) || sv.furn.get(id) || null;
+  const contOf = (id) => sv.drops.get(id) || sv.furn.get(id) || sv.boxes.get(id) || null;
+  const deployOf = (id) => sv.furn.get(id) || sv.sbags.get(id) || sv.boxes.get(id) || null;
   function broadcastCont(c) {
     const msg = { cid: c.id, slots: c.slots, on: c.on || false };
     send('cset', msg);
@@ -355,12 +357,48 @@ export function createSurvival(env) {
     for (const m of [b, h]) { m.receiveShadow = true; g.add(m); }
     return { g, meshes: [b, h] };
   }
+  // 木箱：木板箱子、鐵角、蓋子上一個扣環
+  const BOX = { w: 1.0, h: 0.62, d: 0.62, slots: 12 };
+  function boxMesh() {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(BOX.w, BOX.h - 0.12, BOX.d).translate(0, (BOX.h - 0.12) / 2, 0), MAT.crate);
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(BOX.w + 0.03, 0.12, BOX.d + 0.03).translate(0, BOX.h - 0.06, 0), MAT.crate);
+    const corners = new THREE.Mesh(mergeCorners(), MAT.dark);
+    const latch = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.03).translate(0, BOX.h - 0.12, BOX.d / 2 + 0.02), MAT.dark);
+    for (const m of [body, lid, corners, latch]) { m.castShadow = m.receiveShadow = true; g.add(m); }
+    return { g, meshes: [body, lid, corners, latch] };
+  }
+  function mergeCorners() {
+    const pos = [], idx = [];
+    let off = 0;
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+      const b = new THREE.BoxGeometry(0.07, BOX.h + 0.02, 0.07).translate(sx * (BOX.w / 2 - 0.02), BOX.h / 2, sz * (BOX.d / 2 - 0.02));
+      const a = b.attributes.position.array, ix = b.index.array;
+      for (let i = 0; i < a.length; i++) pos.push(a[i]);
+      for (let i = 0; i < ix.length; i++) idx.push(ix[i] + off);
+      off += a.length / 3;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setIndex(idx); geo.computeVertexNormals();
+    return geo;
+  }
   function setFurnaceLook(f) {
     f.mouth.material = f.on ? MAT.mouthOn : MAT.mouthOff;
     if (f.fire) f.fire.visible = !!f.on;
   }
   function createDeploy({ id, kind, x, y, z, r, owner }) {
-    if (sv.furn.has(id) || sv.sbags.has(id)) return;
+    if (deployOf(id)) return;
+    if (kind === 'box') {
+      const { g, meshes } = boxMesh();
+      g.position.set(x, y, z); g.rotation.y = r;
+      scene.add(g);
+      for (const m of meshes) { m.userData = { surf: 'wood', boxId: id, noHole: true }; solids.push(m); }
+      const col = { type: 'obox', cx: x, cz: z, hx: BOX.w / 2, hz: BOX.d / 2, ax: Math.cos(r), az: -Math.sin(r), y0: y - 0.1, y1: y + BOX.h };
+      colliders.push(col);
+      sv.boxes.set(id, { id, owner, x, y, z, r, g, meshes, col, slots: Array(BOX.slots).fill(null), hp: DEPLOY.box.hp });
+      return;
+    }
     if (kind === 'furnace') {
       const { g, meshes, mouth } = furnaceMesh();
       g.position.set(x, y, z); g.rotation.y = r;
@@ -381,7 +419,7 @@ export function createSurvival(env) {
     }
   }
   function removeDeploy(id) {
-    const f = sv.furn.get(id) || sv.sbags.get(id);
+    const f = deployOf(id);
     if (!f) return;
     scene.remove(f.g);
     for (const m of f.meshes) { const k = solids.indexOf(m); if (k >= 0) solids.splice(k, 1); }
@@ -393,10 +431,17 @@ export function createSurvival(env) {
       if (items.length) createDrop({ id: `${id}d`, p: [f.x, f.y + 0.5, f.z], slots: items, kind: 'bag' });
       if (sv.openCont === id) closeContainer();
     }
+    if (sv.boxes.has(id)) {
+      sv.boxes.delete(id);
+      // 木箱被打爛：裡面的東西掉出來
+      const items = f.slots.filter(Boolean);
+      if (items.length) createDrop({ id: `${id}d`, p: [f.x, f.y + 0.4, f.z], slots: items, kind: 'bag' });
+      if (sv.openCont === id) closeContainer();
+    }
     sv.sbags.delete(id);
   }
   function damageDeploy(id, dmg, remote = false) {
-    const f = sv.furn.get(id) || sv.sbags.get(id);
+    const f = deployOf(id);
     if (!f) return;
     f.hp -= dmg;
     if (!remote) send('ddmg', { id, dmg });
@@ -428,16 +473,16 @@ export function createSurvival(env) {
   const deployGhost = (() => {
     const mat = new THREE.MeshBasicMaterial({ color: '#5fd16a', transparent: true, opacity: 0.38, depthWrite: false });
     const g = new THREE.Group();
-    const furnaceG = furnaceMesh().g, sbagG = sbagMesh().g;
-    for (const gg of [furnaceG, sbagG]) gg.traverse((o) => { if (o.isMesh) o.material = mat; });
-    g.add(furnaceG, sbagG);
+    const furnaceG = furnaceMesh().g, sbagG = sbagMesh().g, boxG = boxMesh().g;
+    for (const gg of [furnaceG, sbagG, boxG]) gg.traverse((o) => { if (o.isMesh) o.material = mat; });
+    g.add(furnaceG, sbagG, boxG);
     g.visible = false;
     scene.add(g);
     return {
       show(res) {
         if (!res || res.hide) { g.visible = false; return; }
         g.visible = true;
-        furnaceG.visible = res.kind === 'furnace'; sbagG.visible = res.kind === 'sbag';
+        furnaceG.visible = res.kind === 'furnace'; sbagG.visible = res.kind === 'sbag'; boxG.visible = res.kind === 'box';
         g.position.set(res.x, res.y, res.z); g.rotation.y = res.r;
         mat.color.set(res.ok ? '#5fd16a' : '#e0503c');
       },
@@ -514,8 +559,8 @@ export function createSurvival(env) {
       });
       return true;
     }
-    if (it.id === 'furnace' || it.id === 'sbag') {
-      const msg = { id: nid(it.id === 'furnace' ? 'f' : 's'), kind: it.id, x: +preview.x.toFixed(3), y: +preview.y.toFixed(3), z: +preview.z.toFixed(3), r: +preview.r.toFixed(3), owner: host.me() };
+    if (it.id === 'furnace' || it.id === 'sbag' || it.id === 'box') {
+      const msg = { id: nid({ furnace: 'f', sbag: 's', box: 'x' }[it.id]), kind: it.id, x: +preview.x.toFixed(3), y: +preview.y.toFixed(3), z: +preview.z.toFixed(3), r: +preview.r.toFixed(3), owner: host.me() };
       createDeploy(msg);
       send('deploy', msg);
       consumeHeld();
@@ -543,8 +588,43 @@ export function createSurvival(env) {
 
   // ---------- 挖、砍、敲 ----------
   // 近戰命中世界上的東西（不是人）：樹、礦、鐵桶、北極熊、建築、設施
+  // 槌子打到自己蓋的建築：木頭的升級成鐵（鐵不夠就用木頭修），鐵的被打壞了就修。回傳有沒有打到建築
+  function hammerHit(wh) {
+    const rec = structs.fromHit(wh);
+    if (!rec) return false;
+    if (rec.type === 'door') { hud.toast('門已經是鐵的了，不能再升級', 1500); return true; }
+    if (rec.owner !== host.me()) { audio.clunk(); hud.toast('這不是你蓋的，不能升級或修理', 1500); return true; }
+    const name = PIECES[rec.type].name, R = UPGRADE.repair;
+    if (rec.tier === 'wood') {
+      const need = UPGRADE.metal[rec.type];
+      if (count('metal') >= need) {
+        take('metal', need);
+        structs.upgrade(rec.id);
+        send('pup', { id: rec.id });
+        audio.build(); audio.clunk();
+        hud.pickup(`${name}升級成鐵`, `-${need} 鐵`);
+        return true;
+      }
+      if (rec.hp < rec.maxHp && count('wood') >= R.cost) { repair(rec, 'wood'); return true; }
+      audio.beep(false);
+      hud.toast(`升級成鐵要 ${need} 鐵（你有 ${count('metal')}）`, 1800);
+      return true;
+    }
+    if (rec.hp >= rec.maxHp) { hud.toast(`${name}已經是鐵的，血是滿的`, 1300); return true; }
+    if (count('metal') < R.cost) { audio.beep(false); hud.toast(`修理要 ${R.cost} 鐵`, 1300); return true; }
+    repair(rec, 'metal');
+    return true;
+  }
+  function repair(rec, res) {
+    take(res, UPGRADE.repair.cost);
+    structs.setHp(rec.id, rec.hp + UPGRADE.repair.hp);
+    send('prep', { id: rec.id, hp: Math.round(rec.hp) });
+    audio.build();
+    hud.pickup('修理', `${Math.ceil(rec.hp)} / ${rec.maxHp}`);
+  }
   function meleeWorld(wh, weapon, dir) {
     const def = MELEE[weapon];
+    if (weapon === 'hammer' && hammerHit(wh)) return;
     const bear = bears.fromHit(wh);
     if (bear) {
       if (!bear.dead) { hitThings(wh, { bear: def.dmg }); audio.chop(); return; }
@@ -597,7 +677,7 @@ export function createSurvival(env) {
       return true;
     }
     if (ud.crateId) { damageCrate(ud.crateId, dmg.crate); return true; }
-    if (ud.furnId || ud.sbagId) { damageDeploy(ud.furnId || ud.sbagId, dmg.deploy); return true; }
+    if (ud.furnId || ud.sbagId || ud.boxId) { damageDeploy(ud.furnId || ud.sbagId || ud.boxId, dmg.deploy); return true; }
     const rec = structs.fromHit(wh);
     if (rec) { damagePiece(rec.id, dmg.piece); return true; }
     return false;
@@ -616,18 +696,22 @@ export function createSurvival(env) {
   const gunHit = (wh, gun) => hitThings(wh, { piece: GUNS[gun].pieceDmg, crate: 12, deploy: GUNS[gun].pieceDmg, bear: GUNS[gun].dmg * falloffMult(GUNS[gun], wh.dist) });
 
   // ---------- 手雷 ----------
+  // 丟手上的手雷或 C4
   function throwNade(origin, dir) {
-    const v = dir.clone().multiplyScalar(NADE.speed).add(new THREE.Vector3(0, 2.5, 0)).add(host.velocity().multiplyScalar(0.5));
+    const c4 = held()?.id === 'c4', def = c4 ? C4 : NADE_DEF;
+    const v = dir.clone().multiplyScalar(def.speed).add(new THREE.Vector3(0, c4 ? C4.up : 2.5, 0)).add(host.velocity().multiplyScalar(0.5));
     const id = nid('n');
-    proj.spawnNade({ id, o: origin, v, mine: true });
-    send('nade', { id, o: v3(origin), v: v3(v) });
+    proj.spawnNade({ id, o: origin, v, mine: true, type: c4 ? 'c4' : 'nade' });
+    send('nade', { id, o: v3(origin), v: v3(v), c: c4 ? 1 : 0 });
     consumeHeld();
   }
-  function explode(p, mine) {
+  function explode(p, mine, type = 'nade') {
+    const D = type === 'c4' ? C4 : NADE_DEF, w = type === 'c4' ? 'c4' : 'grenade';
     fx.explosion(p);
+    if (type === 'c4') fx.explosion(p.clone().add(new THREE.Vector3(0, 0.5, 0)));
     const dist = p.distanceTo(host.eye());
     audio.boom(p, dist);
-    host.shake(Math.max(0, 1 - dist / 30));
+    host.shake(Math.max(0, (type === 'c4' ? 1.3 : 1) - dist / 30));
     if (!mine) return;
     // 以下只有丟的人算：人、北極熊、建築、鐵桶、設施
     const center = (pos) => pos.clone().add(new THREE.Vector3(0, 1.0, 0));
@@ -639,24 +723,24 @@ export function createSurvival(env) {
     };
     const pdmg = (pos) => {
       const d = center(pos).distanceTo(p);
-      if (d > NADE.radius) return 0;
-      return Math.round(NADE.playerDmg * (d < 1 ? 1 : 1 - (d - 1) / (NADE.radius - 1)) * losFactor(center(pos)));
+      if (d > D.radius) return 0;
+      return Math.round(D.playerDmg * (d < 1 ? 1 : 1 - (d - 1) / (D.radius - 1)) * losFactor(center(pos)));
     };
     const me = pdmg(host.feet());
-    if (me > 0) host.damageSelf(me, p, 'grenade');
+    if (me > 0) host.damageSelf(me, p, w);
     const opp = host.opponent();
-    if (opp && opp.alive) { const d = pdmg(opp.pos); if (d > 0) host.damageOpponent(d, 'body', p, 'grenade'); }
+    if (opp && opp.alive) { const d = pdmg(opp.pos); if (d > 0) host.damageOpponent(d, 'body', p, w); }
     for (const rec of [...structs.pieces.values()]) {
       const d = structs.centerOf(rec).distanceTo(p);
-      if (d > NADE.pieceRadius) continue;
-      const k = d < 1.5 ? 1 : 1 - (d - 1.5) / (NADE.pieceRadius - 1.5);
-      damagePiece(rec.id, Math.round(NADE.pieceDmg * k));
+      if (d > D.pieceRadius) continue;
+      const k = d < D.pieceFull ? 1 : 1 - (d - D.pieceFull) / (D.pieceRadius - D.pieceFull);
+      damagePiece(rec.id, Math.round(D.pieceDmg * k));
     }
-    for (const c of [...sv.crates.values()]) if (c.pos.distanceTo(p) < 3) damageCrate(c.id, NADE.crateDmg);
-    bears.explode(p, NADE.radius, NADE.playerDmg);
-    for (const f of [...sv.furn.values(), ...sv.sbags.values()]) {
+    for (const c of [...sv.crates.values()]) if (c.pos.distanceTo(p) < 3) damageCrate(c.id, D.crateDmg);
+    bears.explode(p, D.radius, D.playerDmg);
+    for (const f of [...sv.furn.values(), ...sv.sbags.values(), ...sv.boxes.values()]) {
       const d = Math.hypot(f.x - p.x, f.y - p.y, f.z - p.z);
-      if (d < NADE.pieceRadius) damageDeploy(f.id, Math.round(NADE.pieceDmg * (1 - d / NADE.pieceRadius)));
+      if (d < D.pieceRadius) damageDeploy(f.id, Math.round(D.pieceDmg * (1 - d / D.pieceRadius)));
     }
   }
 
@@ -697,10 +781,17 @@ export function createSurvival(env) {
     const node = world.nodes.fromHit(wh);
     if (node?.alive) return { kind: 'node', label: null, hp: `${node.kind === 'metal' ? '鐵礦' : '硫磺礦'} · 還有 ${node.ore}` };
     if (ud.furnId) return { kind: 'furnace', id: ud.furnId, label: '打開火爐' };
+    if (ud.boxId) { const b = sv.boxes.get(ud.boxId); return { kind: 'box', id: ud.boxId, label: '打開木箱', hp: b ? `木箱 ${Math.max(0, Math.ceil(b.hp))} / ${DEPLOY.box.hp}` : null }; }
     if (ud.sbagId) { const b = sv.sbags.get(ud.sbagId); return { kind: 'sbag', id: ud.sbagId, label: null, hp: b?.owner === host.me() ? '你的睡袋 · 死掉可以從這裡重生' : '別人的睡袋 · 打爛它，他就不能在這重生' }; }
     if (ud.crateId) { const c = sv.crates.get(ud.crateId); return { kind: 'crate', id: ud.crateId, label: null, hp: `鐵桶 ${Math.max(0, Math.ceil(c?.hp ?? 0))} / ${CRATE.hp} · 打破它拿東西` }; }
     const rec = hitRec;
-    if (rec) return { kind: 'piece', id: rec.id, label: null, hp: `${PIECES[rec.type]?.name || ''} ${Math.max(0, Math.ceil(rec.hp))} / ${rec.maxHp}` };
+    if (rec) {
+      let tip = '';
+      if (held()?.id === 'hammer' && rec.owner === host.me() && rec.type !== 'door') {
+        tip = rec.tier === 'wood' ? ` · 左鍵升級成鐵（${UPGRADE.metal[rec.type]} 鐵）` : rec.hp < rec.maxHp ? ` · 左鍵修理（${UPGRADE.repair.cost} 鐵）` : '';
+      }
+      return { kind: 'piece', id: rec.id, label: null, hp: `${PIECES[rec.type]?.name || '門'}${rec.tier === 'metal' ? '（鐵）' : ''} ${Math.max(0, Math.ceil(rec.hp))} / ${rec.maxHp}${tip}` };
+    }
     return null;
   }
   function interact() {
@@ -711,7 +802,7 @@ export function createSurvival(env) {
       if (!drop) return;
       if (drop.kind === 'bag') openContainer(drop.id);
       else requestOp({ op: 'takeAll', cid: drop.id });
-    } else if (t.kind === 'furnace') openContainer(t.id);
+    } else if (t.kind === 'furnace' || t.kind === 'box') openContainer(t.id);
     else if (t.kind === 'door') {
       const rec = structs.pieces.get(t.id);
       if (!rec) return;
@@ -775,14 +866,16 @@ export function createSurvival(env) {
         break;
       }
       case 'pdmg': damagePiece(m.id, m.dmg, true); break;
+      case 'pup': { structs.upgrade(m.id); const rec = structs.pieces.get(m.id); if (rec) audio.clunk(structs.centerOf(rec), structs.centerOf(rec).distanceTo(host.eye())); break; }
+      case 'prep': structs.setHp(m.id, m.hp); break;
       case 'pdoor': structs.placeDoor(m); break;
       case 'door': toggleDoor(m.id, m.open, true); break;
       case 'lock': structs.attachLock(m); break;
       case 'auth': structs.authorize(m.door, m.who); break;
       case 'deploy': createDeploy(m); break;
       case 'ddmg': damageDeploy(m.id, m.dmg, true); break;
-      case 'nade': proj.spawnNade({ id: m.id, o: toV(m.o), v: toV(m.v), mine: false }); break;
-      case 'boom': { proj.remove(m.id); explode(toV(m.p), false); break; }
+      case 'nade': proj.spawnNade({ id: m.id, o: toV(m.o), v: toV(m.v), mine: false, type: m.c ? 'c4' : 'nade' }); break;
+      case 'boom': { proj.remove(m.id); explode(toV(m.p), false, m.c ? 'c4' : 'nade'); break; }
       case 'bears': case 'bdmg': case 'bdie': case 'bharv': case 'bgone': bears.onMessage(m); break;
       case 'arrow': {
         proj.spawnArrow({ id: m.id, o: toV(m.o), v: toV(m.v), mine: false });
@@ -835,7 +928,7 @@ export function createSurvival(env) {
     sv.hotIdx = 0;
     for (const id of [...sv.crates.keys()]) removeCrate(id);
     for (const id of [...sv.drops.keys()]) removeDrop(id);
-    for (const id of [...sv.furn.keys(), ...sv.sbags.keys()]) { const f = sv.furn.get(id); if (f) f.slots.fill(null); removeDeploy(id); }
+    for (const id of [...sv.furn.keys(), ...sv.sbags.keys(), ...sv.boxes.keys()]) { const f = sv.furn.get(id) || sv.boxes.get(id); if (f) f.slots.fill(null); removeDeploy(id); }
     for (const id of [...sv.drops.keys()]) removeDrop(id);
     sv.nodeTimers.clear();
     world.nodes.reset();
@@ -878,7 +971,7 @@ export function createSurvival(env) {
     onMessage, update, reset, giveStart, onDeath, myBags,
     get target() { return sv.target; },
     get remaining() { return Math.max(0, (sv.endAt - performance.now()) / 1000); },
-    rotate() { sv.rot += Math.PI / 4; },
+    rotate() { sv.rot += holdKind() === 'build' && sv.buildType === 'stairs' ? Math.PI / 2 : Math.PI / 4; },
     setBuildType(t) { sv.buildType = t; },
     get buildType() { return sv.buildType; },
     onChange(fn) { sv.listeners.add(fn); },
@@ -887,7 +980,7 @@ export function createSurvival(env) {
     selectHot(i) { sv.hotIdx = i; changed(); },
     get hotIdx() { return sv.hotIdx; },
     spawnArrowNet(id, o, v) { send('arrow', { id, o: v3(o), v: v3(v) }); },
-    sendBoom(id, p) { send('boom', { id, p: v3(p) }); },
+    sendBoom(id, p, type = 'nade') { send('boom', { id, p: v3(p), c: type === 'c4' ? 1 : 0 }); },
     nid,
     refresh: changed,
   };

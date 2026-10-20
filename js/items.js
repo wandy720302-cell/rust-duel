@@ -25,6 +25,9 @@ export const ICONS = {
   sbag: svg('<rect x="8" y="22" width="48" height="24" rx="10" fill="#5a6438"/><rect x="8" y="22" width="14" height="24" rx="7" fill="#8a7f5c"/><path d="M24 26 H52 M24 42 H52" stroke="#465030" stroke-width="2"/>'),
   ammo_pistol: svg('<g fill="#c9a24a"><rect x="11" y="27" width="10" height="21" rx="1"/><rect x="27" y="27" width="10" height="21" rx="1"/><rect x="43" y="27" width="10" height="21" rx="1"/></g><g fill="#b87333"><path d="M11 27 Q16 13 21 27 Z"/><path d="M27 27 Q32 13 37 27 Z"/><path d="M43 27 Q48 13 53 27 Z"/></g><g fill="#8a6a2a"><rect x="11" y="45" width="10" height="3"/><rect x="27" y="45" width="10" height="3"/><rect x="43" y="45" width="10" height="3"/></g>'),
   ammo_rifle: svg('<g fill="#d3ad52"><rect x="13" y="24" width="8" height="30" rx="1"/><rect x="28" y="24" width="8" height="30" rx="1"/><rect x="43" y="24" width="8" height="30" rx="1"/></g><g fill="#c9a24a"><path d="M13 24 L15 19 L19 19 L21 24 Z"/><path d="M28 24 L30 19 L34 19 L36 24 Z"/><path d="M43 24 L45 19 L49 19 L51 24 Z"/></g><g fill="#b87333"><path d="M15 19 L17 7 L19 19 Z"/><path d="M30 19 L32 7 L34 19 Z"/><path d="M45 19 L47 7 L49 19 Z"/></g><g fill="#8a6a2a"><rect x="13" y="51" width="8" height="3"/><rect x="28" y="51" width="8" height="3"/><rect x="43" y="51" width="8" height="3"/></g>'),
+  hammer: svg('<rect x="29" y="22" width="7" height="36" rx="2" fill="#8a6038"/><rect x="14" y="8" width="36" height="15" rx="2" fill="#5c6066"/><rect x="14" y="8" width="8" height="15" fill="#474b50"/><rect x="29" y="40" width="7" height="3" fill="#3a3a36"/><rect x="29" y="47" width="7" height="3" fill="#3a3a36"/>'),
+  c4: svg('<rect x="10" y="22" width="44" height="26" rx="2" fill="#c9b27c"/><rect x="10" y="22" width="44" height="26" rx="2" fill="none" stroke="#8f7a4a" stroke-width="1.5"/><rect x="16" y="22" width="5" height="26" fill="#3a3a36"/><rect x="43" y="22" width="5" height="26" fill="#3a3a36"/><rect x="25" y="14" width="14" height="11" rx="1" fill="#24262a"/><circle cx="35" cy="19" r="2.2" fill="#ff3b2a"/><path d="M28 14 Q26 6 20 8 M36 14 Q40 5 46 9" stroke="#c43c2c" stroke-width="2" fill="none"/>'),
+  box: svg('<rect x="8" y="20" width="48" height="32" fill="#8a6038"/><rect x="8" y="14" width="48" height="10" fill="#9c6c40"/><path d="M8 30 H56 M8 41 H56" stroke="#5e3f22" stroke-width="2"/><g fill="#3a3a36"><rect x="8" y="14" width="5" height="38"/><rect x="51" y="14" width="5" height="38"/></g><rect x="28" y="22" width="8" height="7" fill="#b8b2a4"/>'),
   bear_meat: svg('<path d="M12 40 Q8 22 26 15 Q46 9 53 25 Q57 41 41 50 Q23 56 12 40 Z" fill="#b8434a"/><path d="M19 38 Q21 26 33 21" stroke="#efc9c2" stroke-width="3" fill="none"/><path d="M28 44 Q38 40 44 30" stroke="#8e2c34" stroke-width="2" fill="none"/><rect x="43" y="39" width="15" height="6" rx="3" transform="rotate(35 50 42)" fill="#ece6d6"/><circle cx="57" cy="49" r="3.6" fill="#ece6d6"/>'),
   cooked_meat: svg('<path d="M12 40 Q8 22 26 15 Q46 9 53 25 Q57 41 41 50 Q23 56 12 40 Z" fill="#7d4524"/><path d="M16 30 L44 18 M14 38 L50 24 M20 46 L52 32" stroke="#3e1f0e" stroke-width="2.6"/><path d="M19 36 Q22 26 30 22" stroke="#b57a4a" stroke-width="2" fill="none"/><rect x="43" y="39" width="15" height="6" rx="3" transform="rotate(35 50 42)" fill="#e4dcc8"/><circle cx="57" cy="49" r="3.6" fill="#e4dcc8"/>'),
   cloth: svg('<path d="M8 20 L48 13 L56 28 L14 35 Z" fill="#cdbb95"/><path d="M12 33 L54 26 L57 42 L15 49 Z" fill="#b6a27a"/><path d="M10 27 L52 20 M14 41 L55 34" stroke="#8f7d58" stroke-width="1.4" stroke-dasharray="3 2"/>'),
@@ -50,6 +53,7 @@ export const ITEMS = {
   cooked_meat: { name: '烤熊肉', stack: 20, cat: '食物', hold: 'eat', desc: '左鍵吃掉：飢餓度 +100，慢慢回 20 血' },
   bandage: { name: '繃帶', stack: 10, cat: '醫療', hold: 'heal', desc: '左鍵包紮：馬上回 15 血，之後再慢慢回 10' },
   rock: { name: '石頭', stack: 1, cat: '工具', hold: 'melee', desc: '開局唯一的財產。敲樹、敲礦、敲人' },
+  hammer: { name: '槌子', stack: 1, cat: '工具', hold: 'melee', desc: '對著自己蓋的建築左鍵：木頭升級成鐵（血量 3 倍，鐵牆 1200）；已經是鐵、被打壞了就修理' },
   sword: { name: '成吉思汗之刀', stack: 1, cat: '武器', hold: 'melee', desc: '彎刀，砍人很痛，採集比石頭差' },
   bow: { name: '弓', stack: 1, cat: '武器', hold: 'bow', desc: '按住拉弓、放開射出。拉滿傷害最高，需要箭' },
   arrow: { name: '箭', stack: 64, cat: '彈藥', desc: '弓的彈藥' },
@@ -60,6 +64,8 @@ export const ITEMS = {
   grenade: { name: '手雷', stack: 5, cat: '武器', hold: 'throw', desc: '左鍵丟出，3 秒後爆炸。炸人也炸房子，拆家必備' },
   plan: { name: '建築藍圖', stack: 1, cat: '工具', hold: 'build', desc: '右鍵選要蓋的東西，左鍵蓋。每一塊都要花木頭' },
   furnace: { name: '火爐', stack: 1, cat: '設施', hold: 'deploy', desc: '放在地上，按 E 打開。放木頭當燃料、放礦石，點火就會煉' },
+  box: { name: '木箱', stack: 1, cat: '設施', hold: 'deploy', desc: '放在家裡，按 E 打開，可以放 12 格東西。被打爛的話東西會掉出來' },
+  c4: { name: 'C4 炸藥', stack: 5, cat: '武器', hold: 'throw', desc: '左鍵丟出去會黏在東西上，嗶 10 秒後爆炸。一顆就能炸掉一面木牆，拆家專用' },
   door: { name: '一般門', stack: 1, cat: '設施', hold: 'deploy', desc: '裝在門框上，按 E 開關' },
   lock: { name: '電子鎖', stack: 1, cat: '設施', hold: 'deploy', desc: '裝在門上，設定 4 位數密碼。沒有密碼的人打不開' },
   sbag: { name: '睡袋', stack: 1, cat: '設施', hold: 'deploy', desc: '放在家裡，死掉之後可以從這裡重生' },
@@ -68,6 +74,7 @@ export const ITEMS = {
 // ---------- 配方（內建藍圖，點了就能做） ----------
 export const RECIPES = [
   { id: 'plan', out: 1, time: 1, cost: { wood: 10 } },
+  { id: 'hammer', out: 1, time: 3, cost: { wood: 100 } },
   { id: 'furnace', out: 1, time: 5, cost: { wood: 150 } },
   { id: 'sbag', out: 1, time: 4, cost: { wood: 60 } },
   { id: 'sword', out: 1, time: 5, cost: { wood: 60, metal: 50 } },
@@ -82,6 +89,9 @@ export const RECIPES = [
   { id: 'door', out: 1, time: 5, cost: { wood: 150, metal: 50 } },
   { id: 'lock', out: 1, time: 4, cost: { wood: 50, metal: 100 } },
   { id: 'bandage', out: 1, time: 2, cost: { cloth: 4 } },
+  { id: 'box', out: 1, time: 4, cost: { wood: 100 } },
+  // rust 的 C4 要炸藥 + 布 + 科技零件；這裡用鐵、硫磺、布（布要打北極熊）
+  { id: 'c4', out: 1, time: 10, cost: { metal: 60, sulfur: 120, cloth: 5 } },
 ];
 export const recipeOf = (id) => RECIPES.find((r) => r.id === id);
 
@@ -96,10 +106,19 @@ export const PIECES = {
   tfloor: { name: '三角地板', shape: 'tri', slot: 'floor', cost: 25, hp: 150 },
   roof: { name: '屋頂', shape: 'sq', slot: 'floor', cost: 80, hp: 300 },
   troof: { name: '三角屋頂', shape: 'tri', slot: 'floor', cost: 40, hp: 200 },
+  window: { name: '玻璃窗', shape: 'wall', slot: 'wall', cost: 70, hp: 350 },
+  stairs: { name: '樓梯', shape: 'sq', slot: 'stairs', cost: 75, hp: 250 },
 };
-export const PIECE_ORDER = ['found', 'tfound', 'wall', 'doorway', 'floor', 'tfloor', 'roof', 'troof'];
+// 槌子升級：木頭 → 鐵，血量變 3 倍（鐵牆 1200），花的鐵照 rust 的比例抓
+export const UPGRADE = {
+  mult: 3,
+  metal: { found: 200, tfound: 100, wall: 150, doorway: 125, window: 150, floor: 100, tfloor: 50, roof: 150, troof: 75, stairs: 150 },
+  repair: { hp: 100, cost: 10 },   // 修理：一下補 100 血，木造花 10 木頭、鐵造花 10 鐵
+};
+export const PIECE_ORDER = ['found', 'tfound', 'wall', 'doorway', 'window', 'floor', 'tfloor', 'stairs', 'roof', 'troof'];
 export const DEPLOY = {
   furnace: { hp: 200 },
+  box: { hp: 150 },
   door: { hp: 300 },
   lock: { hp: 0 },
   sbag: { hp: 50 },
@@ -114,6 +133,7 @@ export const GUNS = {
 export const MELEE = {
   rock: { dmg: 20, headMult: 1.6, swing: 0.85, hitAt: 0.3, reach: 2.4, wood: 25, ore: 30, pieceDmg: 4, crateDmg: 15, meat: 1, cloth: 2 },
   sword: { dmg: 38, headMult: 1.5, swing: 0.7, hitAt: 0.25, reach: 2.6, wood: 15, ore: 15, pieceDmg: 8, crateDmg: 25, meat: 2, cloth: 3 },
+  hammer: { dmg: 10, headMult: 1.5, swing: 0.6, hitAt: 0.22, reach: 3, wood: 0, ore: 0, pieceDmg: 0, crateDmg: 5, meat: 0, cloth: 0 },
 };
 // 傷害隨距離衰減：a 公尺內全額，到 b 公尺降到 m 倍
 export function falloffMult(G, dist) {
@@ -121,7 +141,9 @@ export function falloffMult(G, dist) {
   return dist <= a ? 1 : dist >= b ? m : 1 + (m - 1) * (dist - a) / (b - a);
 }
 export const BOW = { draw: 0.7, minSpeed: 22, maxSpeed: 52, dmg: 50, headMult: 2.0, gravity: 9.8, pieceDmg: 1, crateDmg: 20 };
-export const NADE = { fuse: 3.0, speed: 16, radius: 6, playerDmg: 95, pieceDmg: 150, pieceRadius: 5, crateDmg: 100 };
+export const NADE = { fuse: 3.0, speed: 16, radius: 6, playerDmg: 95, pieceDmg: 150, pieceFull: 1.5, pieceRadius: 5, crateDmg: 100 };
+// C4：黏在東西上 10 秒後爆。對建築傷害大但範圍小（1.6m 內全額 560：木牆 400、地基 500 都一顆爛）
+export const C4 = { fuse: 10, speed: 11, up: 1.5, radius: 4, playerDmg: 150, pieceDmg: 560, pieceFull: 1.6, pieceRadius: 3.2, crateDmg: 200 };
 
 // ---------- 世界資源 ----------
 export const NODE_ORE = 300;          // 一個礦點能挖多少礦石

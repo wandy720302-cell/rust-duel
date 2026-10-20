@@ -5,13 +5,15 @@
 // 座標慣例跟 three.js 的 rotation.y = r 一樣：本地 +x → (cos r, -sin r)，本地 +z → (sin r, cos r)。
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { PIECES } from './items.js';
+import { PIECES, UPGRADE } from './items.js';
 import { pointInTri, triDist, oboxDist2, RADIUS } from './physics.js';
 
 export const GRID = 3, WALL_H = 3;
 const TRI_IN = GRID / (2 * Math.sqrt(3));    // 正三角形內切圓半徑 0.866
 const TRI_OUT = GRID / Math.sqrt(3);         // 外接圓半徑 1.732
 const HOLE = { w: 1.2, h: 2.3 };             // 門框的洞
+const WIN = { w: 1.4, h: 1.0, y: 1.1 };      // 玻璃窗的洞
+const STEPS = 10, STEP_RISE = WALL_H / STEPS, STEP_RUN = 0.27, STAIR_W = 2.6;
 const MAX_PIECES = 120;                      // 每人上限
 const REACH = 8;
 
@@ -83,6 +85,7 @@ export function createStructures(world, fx) {
     roof: mat({ map: T.planks, color: '#b49a7c' }),
     door: mat({ map: T.sheet, roughness: 0.75, metalness: 0.3 }),
     dark: mat({ color: '#2a2a28', roughness: 0.5, metalness: 0.6 }),
+    glass: mat({ color: '#bcd6e2', transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.3, envMapIntensity: 1.2, depthWrite: false }),
   };
   // 電子鎖的面板：小螢幕 + 九宮格按鍵
   const keypadTex = (() => {
@@ -127,6 +130,38 @@ export function createStructures(world, fx) {
         ]);
         return [[localUV(mergeGeometries(parts), 1.5), M.logs], [localUV(frame, 1), M.dark]];
       }
+      case 'window': {
+        const sideW = (GRID - WIN.w) / 2, top = WIN.y + WIN.h;
+        const parts = [
+          new THREE.BoxGeometry(sideW, WALL_H, 0.25).translate(-GRID / 2 + sideW / 2, WALL_H / 2, 0),
+          new THREE.BoxGeometry(sideW, WALL_H, 0.25).translate(GRID / 2 - sideW / 2, WALL_H / 2, 0),
+          new THREE.BoxGeometry(WIN.w, WIN.y, 0.25).translate(0, WIN.y / 2, 0),
+          new THREE.BoxGeometry(WIN.w, WALL_H - top, 0.25).translate(0, top + (WALL_H - top) / 2, 0),
+        ];
+        const frame = mergeGeometries([
+          new THREE.BoxGeometry(0.08, WIN.h, 0.3).translate(-WIN.w / 2, WIN.y + WIN.h / 2, 0),
+          new THREE.BoxGeometry(0.08, WIN.h, 0.3).translate(WIN.w / 2, WIN.y + WIN.h / 2, 0),
+          new THREE.BoxGeometry(WIN.w + 0.08, 0.08, 0.3).translate(0, WIN.y, 0),
+          new THREE.BoxGeometry(WIN.w + 0.08, 0.08, 0.3).translate(0, top, 0),
+          new THREE.BoxGeometry(0.05, WIN.h, 0.08).translate(0, WIN.y + WIN.h / 2, 0),   // 中間的窗櫺
+        ]);
+        const pane = new THREE.BoxGeometry(WIN.w, WIN.h, 0.03).translate(0, WIN.y + WIN.h / 2, 0);
+        return [[localUV(mergeGeometries(parts), 1.5), M.logs], [localUV(frame, 1), M.dark], [pane, M.glass]];
+      }
+      // 樓梯：佔一整格，一階一階往本地 +z 爬到 3m（上面那格不能再蓋地板）
+      case 'stairs': {
+        const steps = [];
+        for (let i = 0; i < STEPS; i++) {
+          const h = STEP_RISE * (i + 1);
+          steps.push(new THREE.BoxGeometry(STAIR_W, h, STEP_RUN).translate(0, h / 2, -GRID / 2 + 0.15 + STEP_RUN * (i + 0.5)));
+        }
+        const rails = mergeGeometries([-1, 1].map((sx) => {
+          const g = new THREE.BoxGeometry(0.08, 0.08, 3.4);
+          g.rotateX(-Math.atan2(WALL_H, STEPS * STEP_RUN));
+          return g.translate(sx * (STAIR_W / 2 - 0.04), WALL_H / 2 + 0.95, 0.0);
+        }));
+        return [[localUV(mergeGeometries(steps), 1.2), M.planks], [localUV(rails, 1), M.dark]];
+      }
       case 'floor': return [[localUV(new THREE.BoxGeometry(GRID, 0.2, GRID).translate(0, -0.1, 0), 2), M.planks]];
       case 'tfloor': return [[localUV(triPrism(-0.2, 0), 2), M.planks]];
       case 'roof': return [[localUV(pyramid(sqVerts.map(([x, z]) => [x * 1.06, z * 1.06]), 1.4), 1.5), M.roof], [localUV(new THREE.BoxGeometry(GRID, 0.12, GRID).translate(0, 0.06, 0), 2), M.planks]];
@@ -152,6 +187,8 @@ export function createStructures(world, fx) {
         const sideW = (GRID - HOLE.w) / 2;
         return [ob(-GRID / 2 + sideW / 2, 0, sideW / 2, 0.13, y, y + WALL_H), ob(GRID / 2 - sideW / 2, 0, sideW / 2, 0.13, y, y + WALL_H), ob(0, 0, HOLE.w / 2, 0.13, y + HOLE.h, y + WALL_H)];
       }
+      case 'window': return [ob(0, 0, 1.5, 0.13, y, y + WALL_H)];   // 玻璃也擋人、擋子彈
+      case 'stairs': return Array.from({ length: STEPS }, (_, i) => ob(0, -GRID / 2 + 0.15 + STEP_RUN * (i + 0.5), STAIR_W / 2, STEP_RUN / 2 + 0.01, y, y + STEP_RISE * (i + 1)));
       case 'floor': return [ob(0, 0, 1.5, 1.5, y - 0.2, y)];
       case 'tfloor': return [tri(y - 0.2, y)];
       case 'roof': return [ob(0, 0, 1.5, 1.5, y, y + 0.15)];
@@ -190,6 +227,9 @@ export function createStructures(world, fx) {
         seen.add(kk);
         out.push({ x: e.mx, y: e.y, z: e.mz, r: yawOf(e.nx, e.nz), k: 'w' });
       }
+    } else if (def.slot === 'stairs') {
+      // 樓梯蓋在方形地基 / 地板上面，跟底下那格同一個位置
+      for (const rec of pieces.values()) if ((isBase(rec) || isFloor(rec)) && PIECES[rec.type].shape === 'sq') out.push({ x: rec.x, y: rec.y, z: rec.z, r: rec.r, k: 's' });
     } else if (def.slot === 'floor') {
       for (const rec of pieces.values()) {
         if ((isBase(rec) || isFloor(rec)) && PIECES[rec.type].shape === shape) out.push({ x: rec.x, y: rec.y + WALL_H, z: rec.z, r: rec.r, k: 'f' });
@@ -238,12 +278,14 @@ export function createStructures(world, fx) {
       const d = Math.hypot(s.x - ctx.aim.x, (s.y - ctx.aim.y) * 0.6, s.z - ctx.aim.z);
       if (d < bestD) { bestD = d; best = s; }
     }
-    if (best) Object.assign(res, { x: best.x, y: best.y, z: best.z, r: best.r, snapped: true });
-    else if (def.slot === 'found') {
+    if (best) {
+      Object.assign(res, { x: best.x, y: best.y, z: best.z, r: best.r, snapped: true });
+      if (def.slot === 'stairs') res.r += Math.round((ctx.rot || 0) / (Math.PI / 2)) * (Math.PI / 2);   // R 轉樓梯的方向（一次 90 度）
+    } else if (def.slot === 'found') {
       if (Math.hypot(ctx.aim.x - ctx.pos.x, ctx.aim.z - ctx.pos.z) > REACH) { res.reason = '太遠了'; return res; }
       Object.assign(res, { x: ctx.aim.x, z: ctx.aim.z, r: ctx.yaw + (ctx.rot || 0), snapped: false });
     } else {
-      res.reason = def.slot === 'wall' ? '對準地基或地板的邊' : '對準地基或地板的正上方（牆頂）';
+      res.reason = def.slot === 'wall' ? '對準地基或地板的邊' : def.slot === 'stairs' ? '對準方形的地基或地板' : '對準地基或地板的正上方（牆頂）';
       Object.assign(res, { x: ctx.aim.x, y: ctx.aim.y, z: ctx.aim.z, r: ctx.yaw });
       return res;
     }
@@ -261,6 +303,7 @@ export function createStructures(world, fx) {
     }
     // 重疊檢查：地基檢查整個柱體，牆檢查牆身，地板 / 屋頂檢查板子那一層
     const [y0, y1] = def.slot === 'found' ? [res.bottom + 0.6, res.y] : def.slot === 'wall' ? [res.y, res.y + WALL_H]
+      : def.slot === 'stairs' ? [res.y + 0.05, res.y + WALL_H - 0.1]
       : type === 'roof' || type === 'troof' ? [res.y, res.y + 1.2] : [res.y - 0.2, res.y];
     if (footprint(type, res.x, res.z, res.r).some(([px, pz]) => hitsCollider(px, pz, y0, y1))) { res.reason = '這裡擋到東西了'; return res; }
     for (const p of ctx.players || []) {
@@ -298,7 +341,7 @@ export function createStructures(world, fx) {
   function place(d) {
     if (pieces.has(d.id)) return pieces.get(d.id);
     const def = PIECES[d.type];
-    const rec = { ...d, hp: def.hp, maxHp: def.hp, mats: [], meshes: [], cols: [], door: null };
+    const rec = { ...d, hp: def.hp, maxHp: def.hp, mats: [], meshes: [], cols: [], door: null, tier: 'wood' };
     if (def.slot === 'found' && rec.bottom === undefined) {
       const corners = def.shape === 'tri' ? TRI_V : sqVerts;
       rec.bottom = Math.min(...corners.map(([lx, lz]) => heightAt(...toW(d.x, d.z, d.r, lx, lz))), heightAt(d.x, d.z)) - 0.5;
@@ -309,7 +352,7 @@ export function createStructures(world, fx) {
     for (const [geo, m] of meshesFor(d.type, def.slot === 'found' ? d.y - rec.bottom : 1)) {
       const own = m.clone();
       const mesh = new THREE.Mesh(geo, own);
-      mesh.castShadow = mesh.receiveShadow = true;
+      mesh.castShadow = !own.transparent; mesh.receiveShadow = true;
       mesh.userData = { surf: 'wood', pieceId: d.id, noHole: true };
       g.add(mesh); solids.push(mesh);
       rec.meshes.push(mesh); rec.mats.push(own);
@@ -318,7 +361,7 @@ export function createStructures(world, fx) {
     rec.group = g;
     rec.cols = collidersFor(rec);
     colliders.push(...rec.cols);
-    rec.sock = `${def.slot === 'wall' ? 'w' : 'f'}:${key(d.x, d.y, d.z)}`;
+    rec.sock = `${def.slot === 'wall' ? 'w' : def.slot === 'stairs' ? 's' : 'f'}:${key(d.x, d.y, d.z)}`;
     occupied.set(rec.sock, d.id);
     pieces.set(d.id, rec);
     return rec;
@@ -343,14 +386,40 @@ export function createStructures(world, fx) {
       for (let i = 0; i < 8; i++) fx.impact(c.clone().add(new THREE.Vector3((Math.random() - 0.5) * 2.4, Math.random() * 1.5, (Math.random() - 0.5) * 2.4)), new THREE.Vector3(0, 1, 0), 'wood');
     }
   }
+  // 越破越暗
+  function tint(rec) {
+    const k = Math.max(0, Math.min(1, 1 - rec.hp / rec.maxHp));
+    for (const m of rec.mats) if (!m.transparent) m.color.setRGB(1 - k * 0.45, 1 - k * 0.5, 1 - k * 0.55);
+  }
   function damage(id, dmg) {
     const rec = pieces.get(id);
     if (!rec) return null;
     rec.hp -= dmg;
-    const k = Math.max(0, Math.min(1, 1 - rec.hp / rec.maxHp));
-    for (const m of rec.mats) m.color.setRGB(1 - k * 0.45, 1 - k * 0.5, 1 - k * 0.55);
+    tint(rec);
     if (rec.hp <= 0) { remove(id); return { destroyed: true, rec }; }
     return { destroyed: false, rec };
+  }
+  // 槌子升級：換成鐵皮的樣子，血量變 3 倍、補滿
+  const sheetTex = T.sheet.clone(); sheetTex.wrapS = sheetTex.wrapT = THREE.RepeatWrapping; sheetTex.needsUpdate = true;
+  function upgrade(id) {
+    const rec = pieces.get(id);
+    if (!rec || rec.type === 'door' || rec.tier === 'metal') return false;
+    rec.tier = 'metal';
+    rec.maxHp = PIECES[rec.type].hp * UPGRADE.mult;
+    rec.hp = rec.maxHp;
+    for (const m of rec.mats) {
+      if (m.transparent || !m.map) continue;
+      m.map = sheetTex; m.metalness = 0.35; m.roughness = 0.7; m.needsUpdate = true;
+    }
+    for (const m of rec.meshes) m.userData.surf = 'metal';
+    tint(rec);
+    return true;
+  }
+  function setHp(id, hp) {
+    const rec = pieces.get(id);
+    if (!rec) return;
+    rec.hp = Math.min(rec.maxHp, hp);
+    tint(rec);
   }
 
   // ---------- 門、電子鎖 ----------
@@ -493,12 +562,12 @@ export function createStructures(world, fx) {
   }
 
   return {
-    pieces, evaluate, evaluateDoor, evaluateLock, doorOnRay, showGhost, place, placeDoor, attachLock, authorize, setDoor, damage, remove, update, clear,
+    pieces, evaluate, evaluateDoor, evaluateLock, doorOnRay, showGhost, place, placeDoor, attachLock, authorize, setDoor, damage, upgrade, setHp, remove, update, clear,
     hideGhost() { ghost.visible = false; },
     fromHit(hit) { const id = hit?.mesh?.userData.pieceId; return id ? pieces.get(id) || null : null; },
     countOf(owner) { let n = 0; for (const p of pieces.values()) if (p.owner === owner && p.type !== 'door') n++; return n; },
     centerOf(rec) {
-      const h = PIECES[rec.type]?.slot === 'wall' || rec.type === 'door' ? 1.4 : rec.type === 'roof' || rec.type === 'troof' ? 0.6 : -0.2;
+      const h = PIECES[rec.type]?.slot === 'wall' || rec.type === 'door' ? 1.4 : rec.type === 'stairs' ? 1.5 : rec.type === 'roof' || rec.type === 'troof' ? 0.6 : -0.2;
       return new THREE.Vector3(rec.x, rec.y + h, rec.z);
     },
   };
