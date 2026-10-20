@@ -4,7 +4,8 @@ import { ITEMS, SMELT, SMELT_OUT } from './items.js';
 
 export const HOT = 6, MAIN = 24;
 export const stackOf = (id) => ITEMS[id]?.stack || 1;
-const freshData = (id) => (ITEMS[id]?.mag ? { mag: ITEMS[id].mag } : null);
+// 新做出來的槍彈匣是空的（rust 也是），要自己做子彈、按 R 裝
+const freshData = (id) => (ITEMS[id]?.mag ? { mag: 0 } : null);
 export const cloneItem = (it) => (it ? { id: it.id, n: it.n, ...(it.d ? { d: { ...it.d } } : {}) } : null);
 
 export function createInv() {

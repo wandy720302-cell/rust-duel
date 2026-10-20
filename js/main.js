@@ -174,9 +174,10 @@ function syncHeld() {
     vm.setItem(look);
     S.item = look;
     S.swingCd = 0.35; S.fireCd = Math.max(S.fireCd, 0.3);
-    if (kind === 'gun') S.ammo = it.d?.mag ?? GUNS[it.id].mag;
+    if (kind === 'gun') S.ammo = it.d?.mag ?? 0;
     if (kind !== 'build' && kind !== 'deploy') surv.hidePreview();
   }
+  if (kind === 'gun' && S.reload < 0 && it.d) S.ammo = it.d.mag;
   touch.setMode(look, kind);
   invui.renderHotbar();
 }
@@ -628,9 +629,18 @@ function currentGun() {
   if (S.gameMode === 'survival') return surv.holdKind() === 'gun' ? surv.held().id : null;
   return S.item === 'ak' ? 'ak' : null;
 }
-function startReload() {
+// 生存模式換彈要背包裡有子彈；auto：彈匣空了自動換的那種，沒子彈就安靜放棄、不跳提示
+let noAmmoAt = 0;
+function startReload(auto = false) {
   const g = currentGun();
   if (!g || !S.alive || S.reload >= 0 || S.inject >= 0 || S.ammo === GUNS[g].mag) return;
+  if (S.gameMode === 'survival' && surv.count(GUNS[g].ammo) <= 0) {
+    if (!auto && performance.now() - noAmmoAt > 1500) {
+      noAmmoAt = performance.now();
+      hud.toast(`沒有${ITEM_DEFS[GUNS[g].ammo].name}了，${OPEN_INV}做一些（10 鐵 + 5 硫磺）`, 2200);
+    }
+    return;
+  }
   S.reload = S.reloadTotal = GUNS[g].reload;
   audio.reload(S.reload);
 }
@@ -780,7 +790,13 @@ function updateWeaponSurv(dt) {
     S.reload -= dt;
     if (S.reload <= 0) {
       S.reload = -1;
-      if (kind === 'gun') { S.ammo = GUNS[it.id].mag; it.d = { ...(it.d || {}), mag: S.ammo }; invui.renderHotbar(); }
+      if (kind === 'gun') {
+        const G = GUNS[it.id], got = Math.min(G.mag - S.ammo, surv.count(G.ammo));
+        S.ammo += got;
+        it.d = { ...(it.d || {}), mag: S.ammo };
+        if (got > 0) surv.take(G.ammo, got);
+        invui.renderHotbar();
+      }
     }
   }
   const ready = S.alive && inputActive() && !S.matchOver && !S.uiOpen;
@@ -842,7 +858,7 @@ function updateWeaponSurv(dt) {
       invui.renderHotbar();
     } else {
       S.fireCd = Math.max(0, S.fireCd - dt);
-      if (S.alive && S.ammo === 0 && S.reload < 0 && !firing) startReload();
+      if (S.alive && S.ammo === 0 && S.reload < 0 && !firing) startReload(true);
     }
     if (performance.now() - S.lastShot > 280) S.shotIdx = 0;
   }
@@ -1311,7 +1327,7 @@ function updatePlay(dt, now) {
   hud.survival(S.water, S.food);
   const gunNow = S.item === 'ak' || S.item === 'thompson';
   if (S.gameMode === 'survival') {
-    if (gunNow) hud.ammo(S.ammo, GUNS[S.item].mag, S.reload >= 0, S.item === 'ak' ? '5.56 步槍彈' : '.45 手槍彈');
+    if (gunNow) { const ammoId = GUNS[S.item].ammo; hud.ammo(S.ammo, surv.count(ammoId), S.reload >= 0, ITEM_DEFS[ammoId].name); }
     else if (S.item === 'bow') hud.ammo(surv.count('arrow'), null, false, '箭');
     else if (S.item === 'grenade') hud.ammo(surv.count('grenade'), null, false, '手雷');
     else hud.ammo(null);

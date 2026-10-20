@@ -23,6 +23,8 @@ export const ICONS = {
   door: svg('<rect x="16" y="6" width="32" height="52" fill="#8c4f2e"/><rect x="16" y="14" width="32" height="4" fill="#3c3a36"/><rect x="16" y="44" width="32" height="4" fill="#3c3a36"/><circle cx="42" cy="32" r="3" fill="#2a2a28"/><path d="M22 6 V58 M30 6 V58 M38 6 V58" stroke="rgba(0,0,0,.25)"/>'),
   lock: svg('<rect x="18" y="8" width="28" height="48" rx="3" fill="#2e3034"/><rect x="22" y="14" width="20" height="8" fill="#1a3a22"/><circle cx="38" cy="18" r="2.5" fill="#4bd36a"/><g fill="#9aa0a6"><rect x="22" y="26" width="5" height="5"/><rect x="29.5" y="26" width="5" height="5"/><rect x="37" y="26" width="5" height="5"/><rect x="22" y="34" width="5" height="5"/><rect x="29.5" y="34" width="5" height="5"/><rect x="37" y="34" width="5" height="5"/><rect x="22" y="42" width="5" height="5"/><rect x="29.5" y="42" width="5" height="5"/><rect x="37" y="42" width="5" height="5"/></g>'),
   sbag: svg('<rect x="8" y="22" width="48" height="24" rx="10" fill="#5a6438"/><rect x="8" y="22" width="14" height="24" rx="7" fill="#8a7f5c"/><path d="M24 26 H52 M24 42 H52" stroke="#465030" stroke-width="2"/>'),
+  ammo_pistol: svg('<g fill="#c9a24a"><rect x="11" y="27" width="10" height="21" rx="1"/><rect x="27" y="27" width="10" height="21" rx="1"/><rect x="43" y="27" width="10" height="21" rx="1"/></g><g fill="#b87333"><path d="M11 27 Q16 13 21 27 Z"/><path d="M27 27 Q32 13 37 27 Z"/><path d="M43 27 Q48 13 53 27 Z"/></g><g fill="#8a6a2a"><rect x="11" y="45" width="10" height="3"/><rect x="27" y="45" width="10" height="3"/><rect x="43" y="45" width="10" height="3"/></g>'),
+  ammo_rifle: svg('<g fill="#d3ad52"><rect x="13" y="24" width="8" height="30" rx="1"/><rect x="28" y="24" width="8" height="30" rx="1"/><rect x="43" y="24" width="8" height="30" rx="1"/></g><g fill="#c9a24a"><path d="M13 24 L15 19 L19 19 L21 24 Z"/><path d="M28 24 L30 19 L34 19 L36 24 Z"/><path d="M43 24 L45 19 L49 19 L51 24 Z"/></g><g fill="#b87333"><path d="M15 19 L17 7 L19 19 Z"/><path d="M30 19 L32 7 L34 19 Z"/><path d="M45 19 L47 7 L49 19 Z"/></g><g fill="#8a6a2a"><rect x="13" y="51" width="8" height="3"/><rect x="28" y="51" width="8" height="3"/><rect x="43" y="51" width="8" height="3"/></g>'),
   bear_meat: svg('<path d="M12 40 Q8 22 26 15 Q46 9 53 25 Q57 41 41 50 Q23 56 12 40 Z" fill="#b8434a"/><path d="M19 38 Q21 26 33 21" stroke="#efc9c2" stroke-width="3" fill="none"/><path d="M28 44 Q38 40 44 30" stroke="#8e2c34" stroke-width="2" fill="none"/><rect x="43" y="39" width="15" height="6" rx="3" transform="rotate(35 50 42)" fill="#ece6d6"/><circle cx="57" cy="49" r="3.6" fill="#ece6d6"/>'),
   cooked_meat: svg('<path d="M12 40 Q8 22 26 15 Q46 9 53 25 Q57 41 41 50 Q23 56 12 40 Z" fill="#7d4524"/><path d="M16 30 L44 18 M14 38 L50 24 M20 46 L52 32" stroke="#3e1f0e" stroke-width="2.6"/><path d="M19 36 Q22 26 30 22" stroke="#b57a4a" stroke-width="2" fill="none"/><rect x="43" y="39" width="15" height="6" rx="3" transform="rotate(35 50 42)" fill="#e4dcc8"/><circle cx="57" cy="49" r="3.6" fill="#e4dcc8"/>'),
   cloth: svg('<path d="M8 20 L48 13 L56 28 L14 35 Z" fill="#cdbb95"/><path d="M12 33 L54 26 L57 42 L15 49 Z" fill="#b6a27a"/><path d="M10 27 L52 20 M14 41 L55 34" stroke="#8f7d58" stroke-width="1.4" stroke-dasharray="3 2"/>'),
@@ -51,8 +53,10 @@ export const ITEMS = {
   sword: { name: '成吉思汗之刀', stack: 1, cat: '武器', hold: 'melee', desc: '彎刀，砍人很痛，採集比石頭差' },
   bow: { name: '弓', stack: 1, cat: '武器', hold: 'bow', desc: '按住拉弓、放開射出。拉滿傷害最高，需要箭' },
   arrow: { name: '箭', stack: 64, cat: '彈藥', desc: '弓的彈藥' },
-  ak: { name: 'AK47', stack: 1, cat: '武器', hold: 'gun', mag: 30, desc: '全自動步槍，後座力大，傷害高' },
-  thompson: { name: '湯姆森衝鋒槍', stack: 1, cat: '武器', hold: 'gun', mag: 25, desc: '射速快、好控制，傷害比 AK 低，遠距離會衰減' },
+  ak: { name: 'AK47', stack: 1, cat: '武器', hold: 'gun', mag: 30, desc: '全自動步槍，後座力大，傷害高。用步槍子彈' },
+  thompson: { name: '湯姆森衝鋒槍', stack: 1, cat: '武器', hold: 'gun', mag: 25, desc: '射速快、好控制，傷害比 AK 低，遠距離會衰減。用手槍子彈' },
+  ammo_pistol: { name: '手槍子彈', stack: 128, cat: '彈藥', desc: '湯姆森衝鋒槍用。按 R 換彈時從背包裡拿' },
+  ammo_rifle: { name: '步槍子彈', stack: 128, cat: '彈藥', desc: 'AK47 用的 5.56 子彈。按 R 換彈時從背包裡拿' },
   grenade: { name: '手雷', stack: 5, cat: '武器', hold: 'throw', desc: '左鍵丟出，3 秒後爆炸。炸人也炸房子，拆家必備' },
   plan: { name: '建築藍圖', stack: 1, cat: '工具', hold: 'build', desc: '右鍵選要蓋的東西，左鍵蓋。每一塊都要花木頭' },
   furnace: { name: '火爐', stack: 1, cat: '設施', hold: 'deploy', desc: '放在地上，按 E 打開。放木頭當燃料、放礦石，點火就會煉' },
@@ -69,6 +73,9 @@ export const RECIPES = [
   { id: 'sword', out: 1, time: 5, cost: { wood: 60, metal: 50 } },
   { id: 'bow', out: 1, time: 4, cost: { wood: 80, rope: 1 } },
   { id: 'arrow', out: 2, time: 1, cost: { wood: 5 } },
+  // 子彈：照 rust 的比例，材料一樣但步槍子彈做得比較少（rust 是 4 發 / 3 發，這裡 8 / 6）
+  { id: 'ammo_pistol', out: 8, time: 2, cost: { metal: 10, sulfur: 5 } },
+  { id: 'ammo_rifle', out: 6, time: 3, cost: { metal: 10, sulfur: 5 } },
   { id: 'thompson', out: 1, time: 8, cost: { wood: 100, metal: 100, smg_body: 1 } },
   { id: 'ak', out: 1, time: 10, cost: { wood: 150, metal: 200, rifle_body: 1 } },
   { id: 'grenade', out: 1, time: 3, cost: { metal: 25, sulfur: 40 } },
@@ -100,8 +107,8 @@ export const DEPLOY = {
 
 // ---------- 武器數值 ----------
 export const GUNS = {
-  ak: { dmg: 30, mult: { head: 2.0, body: 1.0, legs: 0.75 }, rpm: 450, mag: 30, reload: 3.0, recoil: 1.0, hip: 1.5, adsSpread: 0.1, falloff: [60, 200, 0.7], range: 320, pieceDmg: 2 },
-  thompson: { dmg: 22, mult: { head: 1.8, body: 1.0, legs: 0.75 }, rpm: 650, mag: 25, reload: 2.6, recoil: 0.55, hip: 1.9, adsSpread: 0.3, falloff: [30, 90, 0.55], range: 200, pieceDmg: 1.5 },
+  ak: { dmg: 30, mult: { head: 2.0, body: 1.0, legs: 0.75 }, rpm: 450, mag: 30, reload: 3.0, recoil: 1.0, hip: 1.5, adsSpread: 0.1, falloff: [60, 200, 0.7], range: 320, pieceDmg: 2, ammo: 'ammo_rifle' },
+  thompson: { dmg: 22, mult: { head: 1.8, body: 1.0, legs: 0.75 }, rpm: 650, mag: 25, reload: 2.6, recoil: 0.55, hip: 1.9, adsSpread: 0.3, falloff: [30, 90, 0.55], range: 200, pieceDmg: 1.5, ammo: 'ammo_pistol' },
 };
 // meat / cloth：刨屍體一下拿多少（rust：工具越利拿越多）
 export const MELEE = {

@@ -524,6 +524,15 @@ export function createSurvival(env) {
     }
     return false;
   }
+  // 退出子彈：槍裡剩的子彈放回背包
+  function unloadGun(arr, i) {
+    const it = arr[i], g = it && GUNS[it.id];
+    if (!g || !it.d?.mag) return;
+    const n = it.d.mag;
+    it.d = { ...it.d, mag: 0 };
+    add(g.ammo, n);
+    audio.pop();
+  }
   function consumeHeld(n = 1) {
     const it = held();
     if (!it) return;
@@ -863,7 +872,7 @@ export function createSurvival(env) {
   const myBags = () => [...sv.sbags.values()].filter((b) => b.owner === host.me());
 
   return {
-    sv, bears, add, count, take, held, holdKind, holdLook, craft, cancelCraft, consumeHeld,
+    sv, bears, add, count, take, held, holdKind, holdLook, craft, cancelCraft, consumeHeld, unloadGun,
     dropFromSlot, contTake, contTakeAll, contPut, contQuickPut, contToggle, openContainer, closeContainer, contOf,
     updatePreview, hidePreview, placeCurrent, meleeWorld, gunHit, hitThings, throwNade, explode, interact,
     onMessage, update, reset, giveStart, onDeath, myBags,

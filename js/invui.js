@@ -1,7 +1,7 @@
 // 生存模式的介面：背包（拖曳 / 點選搬移）、製作清單、容器（火爐、背包、地上的東西）、
 // 製作佇列、電子鎖密碼鍵盤、建築藍圖選單、快捷欄。
 // 電腦：拖曳搬東西、右鍵或雙擊快速搬。手機：點一下選取，再點目標格。
-import { ITEMS, ICONS, RECIPES, PIECES, PIECE_ORDER } from './items.js';
+import { ITEMS, ICONS, RECIPES, PIECES, PIECE_ORDER, GUNS } from './items.js';
 import * as INV from './inventory.js';
 
 const $ = (id) => document.getElementById(id);
@@ -68,8 +68,10 @@ export function createInvUI({ surv, audio, onClose, isTouch }) {
     if (!it) { setHTML(box, '<p class="dim">點一下東西看說明。手機：點一格、再點另一格就能搬過去。</p>'); return; }
     const def = ITEMS[it.id];
     const fromInv = ui.sel.where !== 'cont';
-    setHTML(box, `<div class="infoHead">${ICONS[it.id]}<div><b>${esc(def.name)}</b>${it.n > 1 ? ` <span>×${it.n}</span>` : ''}<p>${esc(def.desc || '')}</p></div></div>
-      <div class="infoBtns">${fromInv ? `<button data-act="drop">丟在地上</button>${it.n > 1 ? '<button data-act="split">拆一半</button>' : ''}` : '<button data-act="take">拿走</button>'}</div>`);
+    const gun = GUNS[it.id], mag = it.d?.mag ?? 0;
+    const magInfo = gun ? `<p class="magInfo">彈匣 ${mag} / ${gun.mag} · 背包裡${esc(ITEMS[gun.ammo].name)} ${surv.count(gun.ammo)}</p>` : '';
+    setHTML(box, `<div class="infoHead">${ICONS[it.id]}<div><b>${esc(def.name)}</b>${it.n > 1 ? ` <span>×${it.n}</span>` : ''}<p>${esc(def.desc || '')}</p>${magInfo}</div></div>
+      <div class="infoBtns">${fromInv ? `<button data-act="drop">丟在地上</button>${it.n > 1 ? '<button data-act="split">拆一半</button>' : ''}${gun && mag > 0 ? '<button data-act="unload">退出子彈</button>' : ''}` : '<button data-act="take">拿走</button>'}</div>`);
   }
 
   function canMake(r, times = 1) { return Object.entries(r.cost).every(([id, n]) => surv.count(id) >= n * times); }
@@ -203,6 +205,7 @@ export function createInvUI({ surv, audio, onClose, isTouch }) {
     else if (act === 'drop' && ui.sel) { surv.dropFromSlot(arrOf(ui.sel.where), ui.sel.i); ui.sel = null; }
     else if (act === 'split' && ui.sel) { INV.splitHalf(arrOf(ui.sel.where), ui.sel.i); surv.refresh(); }
     else if (act === 'take' && ui.sel) { surv.contTake(ui.sel.i); ui.sel = null; }
+    else if (act === 'unload' && ui.sel) surv.unloadGun(arrOf(ui.sel.where), ui.sel.i);
     else if (act === 'toggle') surv.contToggle();
     else if (act === 'takeall') surv.contTakeAll();
   });

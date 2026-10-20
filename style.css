@@ -587,3 +587,4 @@ body.touch.survival #score em { display: block; font-size: 10px; margin-top: 0; 
 #touch .tbtn * { pointer-events: none; }
 .qrow.blocked em { color: #f0907a; }
 #foodRow.low .fill.food { background: #c4402a; animation: blink .8s infinite; }
+.infoHead p.magInfo { color: #f0c06a; }
