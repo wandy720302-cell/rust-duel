@@ -222,6 +222,17 @@ export function createAudio() {
         d[i] = lp * 1.3 * Math.exp(-((t - 0.12) ** 2) * 160) + Math.sin(2 * Math.PI * 80 * t) * 0.6 * (t > 0.2 ? Math.exp(-(t - 0.2) * 22) : 0);
       }
     });
+    // 火箭筒發射：低沉的砰 + 長長的噴射嘶聲
+    buf.launch = noise(1.2, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr, n = Math.random() * 2 - 1;
+        lp += (n - lp) * 0.15;
+        const thump = Math.sin(2 * Math.PI * (70 - 30 * t) * t) * Math.exp(-t * 10) * 0.9;
+        const hiss = lp * 1.4 * Math.min(1, t * 20) * Math.exp(-t * 2.2);
+        d[i] = Math.tanh((thump + hiss + n * 0.4 * Math.exp(-t * 40)) * 1.3) * 0.85;
+      }
+    });
     buf.inject = noise(0.5, (d, sr) => {
       for (let i = 0; i < d.length; i++) {
         const t = i / sr;
@@ -312,6 +323,7 @@ export function createAudio() {
       play('clack', { gain: 0.4, rate: 1.3, when: total * 0.86 });
     },
     inject() { play('inject', { gain: 0.8 }); play('click', { gain: 0.4, rate: 1.4, when: 0.05 }); },
+    launch(at, dist) { play('launch', { gain: at ? 1.6 : 0.9, rate: 0.95 + Math.random() * 0.1, at, dist }); },
     eat() { play('eat', { gain: 0.7, rate: 0.95 + Math.random() * 0.1 }); },
     // C4：有方向的短嗶聲（對方聽得到你家牆上被黏了一顆）
     c4beep(at) { play('beep', { gain: 1.4, rate: 1.35, at, dist: at && api.listenerPos ? at.distanceTo(api.listenerPos) : 0 }); },

@@ -667,8 +667,26 @@ function spreadDeg() {
 }
 
 const falloff = falloffMult;   // 傷害隨距離衰減（湯姆森掉比較多）
+// 火箭筒：發射一顆火箭彈，後座往上一頂
+function fireRocket() {
+  S.ammo--;
+  S.lastShot = performance.now();
+  const sr = deg(spreadDeg()) * Math.sqrt(Math.random()), a = Math.random() * Math.PI * 2;
+  aimEuler.set(S.pitch, S.yaw, 0);
+  const dir = new THREE.Vector3(Math.tan(sr) * Math.cos(a), Math.tan(sr) * Math.sin(a), -1).normalize().applyEuler(aimEuler);
+  const origin = camera.position.clone().addScaledVector(dir, 0.7);
+  surv.fireRocket(origin, dir);
+  camera.updateMatrixWorld();
+  fx.muzzleLight(camera.localToWorld(vm.muzzleCamSpace(tmpV).clone()));
+  vm.fire();
+  audio.launch();
+  S.pitch = clamp(S.pitch + deg(2.5), -1.52, 1.52);
+  S.punch += 0.04;
+  S.shake = Math.max(S.shake, 0.3);
+}
 function fire(gid = 'ak') {
   const G = GUNS[gid];
+  if (G.launcher) { fireRocket(); return; }
   S.ammo--;
   S.lastShot = performance.now();
   const b = S.body;
@@ -1252,7 +1270,7 @@ function readInput(active) {
 function updatePlay(dt, now) {
   const b = S.body;
   const active = inputActive() && S.alive && !S.matchOver;
-  const canAds = S.item === 'ak' || S.item === 'thompson' || S.item === 'bow';
+  const canAds = S.item === 'ak' || S.item === 'thompson' || S.item === 'launcher' || S.item === 'bow';
   const inp = { ...readInput(active), ads: active && aiming && canAds && S.reload < 0 && S.inject < 0, yaw: S.yaw };
   if (TOUCH) {
     const { dx, dy } = touch.consumeLook();
@@ -1280,7 +1298,7 @@ function updatePlay(dt, now) {
 
   // 8 倍鏡舉起來慢一點
   S.ads += ((inp.ads && !S.sprinting ? 1 : 0) - S.ads) * (1 - Math.exp(-(S.sight === 'scope' ? 9 : 14) * dt));
-  const zoom = S.item === 'ak' ? SIGHTS[S.sight].fov : S.item === 'thompson' ? 0.62 : S.item === 'bow' ? 0.8 : 1;
+  const zoom = S.item === 'ak' ? SIGHTS[S.sight].fov : S.item === 'thompson' ? 0.62 : S.item === 'launcher' ? 0.72 : S.item === 'bow' ? 0.8 : 1;
   const fovTarget = lerp(settings.fov, settings.fov * zoom, S.ads);
   // 8 倍鏡開到底：換成全黑鏡框畫面，手上的槍不畫
   S.scoped = S.alive && S.item === 'ak' && S.sight === 'scope' && S.ads > 0.85;
@@ -1325,7 +1343,7 @@ function updatePlay(dt, now) {
 
   hud.health(S.hp);
   hud.survival(S.water, S.food);
-  const gunNow = S.item === 'ak' || S.item === 'thompson';
+  const gunNow = S.item === 'ak' || S.item === 'thompson' || S.item === 'launcher';
   if (S.gameMode === 'survival') {
     if (gunNow) { const ammoId = GUNS[S.item].ammo; hud.ammo(S.ammo, surv.count(ammoId), S.reload >= 0, ITEM_DEFS[ammoId].name); }
     else if (S.item === 'bow') hud.ammo(surv.count('arrow'), null, false, '箭');

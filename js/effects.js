@@ -89,6 +89,10 @@ export function createEffects(scene, T) {
       lightT = 0.05;
     },
     // 手雷爆炸：火球 + 一圈煙 + 飛散的土塊 + 一瞬間的強光
+    // 火箭尾巴拖的白煙
+    smoke(pos) {
+      sprite(puffMat('#d8d4ca'), pos, 0.22, 0.9, new THREE.Vector3((Math.random() - 0.5) * 0.3, 0.25, (Math.random() - 0.5) * 0.3), 3.2);
+    },
     explosion(pos) {
       const fire = new THREE.SpriteMaterial({ map: T.puff, color: '#ffb050', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
       sprite(fire, pos.clone().add(new THREE.Vector3(0, 0.6, 0)), 1.6, 0.35, new THREE.Vector3(0, 1, 0), 2.2);

@@ -191,6 +191,41 @@ export function buildThompson() {
   return { group: g, muzzle, mag, sightY: 0.08 };
 }
 
+// 火箭筒：橄欖綠的發射管扛在肩上，前端露出火箭彈頭（換彈時拿出來的那顆當「彈匣」）
+export function buildLauncher() {
+  const g = new THREE.Group();
+  const olive = new THREE.MeshStandardMaterial({ color: '#4f5a33', roughness: 0.75, metalness: 0.15 });
+  const dark = new THREE.MeshStandardMaterial({ color: '#2c2e32', roughness: 0.5, metalness: 0.5 });
+  const tube = (r, len, mat, z) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 14).rotateX(Math.PI / 2), mat); m.position.z = z; m.castShadow = true; g.add(m); return m; };
+  tube(0.045, 0.9, olive, -0.15);
+  tube(0.055, 0.08, dark, -0.6);     // 前端的套環
+  tube(0.06, 0.12, dark, 0.32);      // 後面的噴口
+  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = true; g.add(m); return m; };
+  box(0.03, 0.1, 0.045, dark, 0, -0.08, 0.02);       // 握把
+  box(0.03, 0.08, 0.04, dark, 0, -0.07, -0.2);       // 前握把
+  box(0.025, 0.035, 0.08, dark, 0, 0.065, -0.1);     // 瞄具座
+  box(0.006, 0.02, 0.006, dark, 0, 0.09, -0.13);     // 瞄準柱（頂端 0.1）
+  const mag = new THREE.Group();                      // 前端露出來的火箭彈頭
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.14, 12).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#c43c2c', roughness: 0.5 }));
+  head.position.z = -0.66; mag.add(head); g.add(mag);
+  const muzzle = new THREE.Object3D(); muzzle.position.set(0, 0, -0.72); g.add(muzzle);
+  return { group: g, muzzle, mag, sightY: 0.1 };
+}
+// 飛出去的火箭彈（頭朝 +z，給 lookAt 用）
+export function buildRocket() {
+  const wrap = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.45, 10).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#6b7340', roughness: 0.6 }));
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.14, 10).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#c43c2c', roughness: 0.5 }));
+  nose.position.z = 0.29;
+  const fins = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.06), new THREE.MeshStandardMaterial({ color: '#3e4728', roughness: 0.7 }));
+  fins.position.z = -0.2; fins.scale.set(1, 0.08, 1);
+  const fins2 = fins.clone(); fins2.scale.set(0.08, 1, 1);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ color: '#ffb050', blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }));
+  glow.position.z = -0.3; glow.scale.setScalar(0.25);
+  wrap.add(body, nose, fins, fins2, glow);
+  return wrap;
+}
+
 // 成吉思汗之刀：蒙古彎刀。刀身用 2D 外形擠出來，往 -z 指，刀背往上彎
 export function buildSword() {
   const g = new THREE.Group();
@@ -409,6 +444,14 @@ export function createViewmodel(T, skin = '#c99d7a') {
     block(tRig, 0.06, 0.1, 0.07, 0, -0.08, -0.3);
     limb(tRig, [-0.02, -0.11, -0.29], [-0.3, -0.42, 0.0], 0.085, 0.08);
     guns.thompson = { rig: tRig, muzzle: th.muzzle, mag: th.mag, flash: flashSprite(th.muzzle), magPos: th.mag.position.clone(), sightY: th.sightY };
+
+    const lRig = new THREE.Group(); lRig.scale.setScalar(RIG); holder.add(lRig);
+    const ln = buildLauncher(); lRig.add(ln.group);
+    block(lRig, 0.06, 0.09, 0.1, 0.008, -0.12, 0.035, -0.3);
+    limb(lRig, [0.02, -0.15, 0.07], [0.16, -0.45, 0.5], 0.085, 0.08);
+    block(lRig, 0.06, 0.1, 0.07, 0, -0.11, -0.2);
+    limb(lRig, [-0.02, -0.13, -0.19], [-0.3, -0.45, 0.05], 0.085, 0.08);
+    guns.launcher = { rig: lRig, muzzle: ln.muzzle, mag: ln.mag, flash: flashSprite(ln.muzzle), magPos: ln.mag.position.clone(), sightY: ln.sightY };
   }
 
   // --- 石頭 ---
@@ -486,7 +529,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
   };
   const meatRig = handRig(buildMeat(false).group), cookedRig = handRig(buildMeat(true).group), bandageRig = handRig(buildBandage().group);
 
-  const rigs = { ak: guns.ak.rig, thompson: guns.thompson.rig, rock: rockRig, sword: swordRig, bow: bowRig, grenade: nadeRig, c4: c4Rig, hammer: hammerRig, plan: planRig, meat: meatRig, cooked: cookedRig, bandage: bandageRig, none: null };
+  const rigs = { ak: guns.ak.rig, thompson: guns.thompson.rig, launcher: guns.launcher.rig, rock: rockRig, sword: swordRig, bow: bowRig, grenade: nadeRig, c4: c4Rig, hammer: hammerRig, plan: planRig, meat: meatRig, cooked: cookedRig, bandage: bandageRig, none: null };
 
   // 開鏡時讓「照門缺口 → 準星」這條線剛好落在畫面正中央
   const POSE = {
@@ -506,7 +549,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
     bandage: { p: [0.15, -0.16, -0.3], r: [0.2, -0.2, 0] },
     none: { p: [0.13, -0.3, -0.3], r: [0, 0, 0] },
   };
-  const ADS = { thompson: { p: [0, -guns.thompson.sightY * RIG, -0.1] } };
+  const ADS = { thompson: { p: [0, -guns.thompson.sightY * RIG, -0.1] }, launcher: { p: [0, -guns.launcher.sightY * RIG, -0.05] } };
 
   const st = {
     kick: 0, kickRot: 0, swayX: 0, swayY: 0, phase: 0, flashT: 0, sprint: 0, down: 0, bob: 0,

@@ -158,7 +158,7 @@ export function createTouch(root, { onTap }) {
     // item：手上拿的東西（ak / thompson / rock / sword / bow / grenade / plan / none）
     // kind：生存模式的手持型態（build / deploy 時多一顆「轉」，build 再多一顆「選擇」）
     setMode(item, kind = null) {
-      const gun = item === 'ak' || item === 'thompson';
+      const gun = item === 'ak' || item === 'thompson' || item === 'launcher';
       const label = { rock: '揮', sword: '揮', hammer: '敲', plan: '放置', bow: '拉弓', grenade: '丟', c4: '丟', meat: '吃', cooked: '吃', bandage: '包紮', none: '—' }[item] || null;
       for (const id of ['#tFire', '#tFire2']) setHtml(root.querySelector(id), label ? `<span>${label}</span>` : ICON_FIRE);
       btn('aim').hidden = !gun && item !== 'bow';

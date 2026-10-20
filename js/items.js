@@ -25,6 +25,8 @@ export const ICONS = {
   sbag: svg('<rect x="8" y="22" width="48" height="24" rx="10" fill="#5a6438"/><rect x="8" y="22" width="14" height="24" rx="7" fill="#8a7f5c"/><path d="M24 26 H52 M24 42 H52" stroke="#465030" stroke-width="2"/>'),
   ammo_pistol: svg('<g fill="#c9a24a"><rect x="11" y="27" width="10" height="21" rx="1"/><rect x="27" y="27" width="10" height="21" rx="1"/><rect x="43" y="27" width="10" height="21" rx="1"/></g><g fill="#b87333"><path d="M11 27 Q16 13 21 27 Z"/><path d="M27 27 Q32 13 37 27 Z"/><path d="M43 27 Q48 13 53 27 Z"/></g><g fill="#8a6a2a"><rect x="11" y="45" width="10" height="3"/><rect x="27" y="45" width="10" height="3"/><rect x="43" y="45" width="10" height="3"/></g>'),
   ammo_rifle: svg('<g fill="#d3ad52"><rect x="13" y="24" width="8" height="30" rx="1"/><rect x="28" y="24" width="8" height="30" rx="1"/><rect x="43" y="24" width="8" height="30" rx="1"/></g><g fill="#c9a24a"><path d="M13 24 L15 19 L19 19 L21 24 Z"/><path d="M28 24 L30 19 L34 19 L36 24 Z"/><path d="M43 24 L45 19 L49 19 L51 24 Z"/></g><g fill="#b87333"><path d="M15 19 L17 7 L19 19 Z"/><path d="M30 19 L32 7 L34 19 Z"/><path d="M45 19 L47 7 L49 19 Z"/></g><g fill="#8a6a2a"><rect x="13" y="51" width="8" height="3"/><rect x="28" y="51" width="8" height="3"/><rect x="43" y="51" width="8" height="3"/></g>'),
+  launcher: svg('<rect x="4" y="24" width="52" height="12" rx="3" fill="#4f5a33"/><rect x="52" y="22" width="9" height="16" rx="2" fill="#3e4728"/><rect x="2" y="23" width="7" height="14" rx="2" fill="#3e4728"/><rect x="24" y="36" width="6" height="12" fill="#2c2e32"/><rect x="34" y="36" width="5" height="9" fill="#2c2e32"/><rect x="28" y="17" width="12" height="7" fill="#2c2e32"/>'),
+  rocket: svg('<rect x="10" y="27" width="34" height="10" fill="#6b7340"/><path d="M44 27 L58 32 L44 37 Z" fill="#c43c2c"/><path d="M10 27 L4 21 L14 27 Z M10 37 L4 43 L14 37 Z" fill="#3e4728"/><rect x="20" y="27" width="3" height="10" fill="#d9c23a"/>'),
   hammer: svg('<rect x="29" y="22" width="7" height="36" rx="2" fill="#8a6038"/><rect x="14" y="8" width="36" height="15" rx="2" fill="#5c6066"/><rect x="14" y="8" width="8" height="15" fill="#474b50"/><rect x="29" y="40" width="7" height="3" fill="#3a3a36"/><rect x="29" y="47" width="7" height="3" fill="#3a3a36"/>'),
   c4: svg('<rect x="10" y="22" width="44" height="26" rx="2" fill="#c9b27c"/><rect x="10" y="22" width="44" height="26" rx="2" fill="none" stroke="#8f7a4a" stroke-width="1.5"/><rect x="16" y="22" width="5" height="26" fill="#3a3a36"/><rect x="43" y="22" width="5" height="26" fill="#3a3a36"/><rect x="25" y="14" width="14" height="11" rx="1" fill="#24262a"/><circle cx="35" cy="19" r="2.2" fill="#ff3b2a"/><path d="M28 14 Q26 6 20 8 M36 14 Q40 5 46 9" stroke="#c43c2c" stroke-width="2" fill="none"/>'),
   box: svg('<rect x="8" y="20" width="48" height="32" fill="#8a6038"/><rect x="8" y="14" width="48" height="10" fill="#9c6c40"/><path d="M8 30 H56 M8 41 H56" stroke="#5e3f22" stroke-width="2"/><g fill="#3a3a36"><rect x="8" y="14" width="5" height="38"/><rect x="51" y="14" width="5" height="38"/></g><rect x="28" y="22" width="8" height="7" fill="#b8b2a4"/>'),
@@ -59,6 +61,8 @@ export const ITEMS = {
   arrow: { name: '箭', stack: 64, cat: '彈藥', desc: '弓的彈藥' },
   ak: { name: 'AK47', stack: 1, cat: '武器', hold: 'gun', mag: 30, desc: '全自動步槍，後座力大，傷害高。用步槍子彈' },
   thompson: { name: '湯姆森衝鋒槍', stack: 1, cat: '武器', hold: 'gun', mag: 25, desc: '射速快、好控制，傷害比 AK 低，遠距離會衰減。用手槍子彈' },
+  launcher: { name: '火箭筒', stack: 1, cat: '武器', hold: 'gun', mag: 1, desc: '一次裝一發火箭彈，打到東西就爆炸。拆家打人都好用，換彈 3.5 秒' },
+  rocket: { name: '火箭彈', stack: 6, cat: '彈藥', desc: '火箭筒的彈藥。對建築 320 傷害（木牆 2 發、鐵牆 4 發），對人最高 130' },
   ammo_pistol: { name: '手槍子彈', stack: 128, cat: '彈藥', desc: '湯姆森衝鋒槍用。按 R 換彈時從背包裡拿' },
   ammo_rifle: { name: '步槍子彈', stack: 128, cat: '彈藥', desc: 'AK47 用的 5.56 子彈。按 R 換彈時從背包裡拿' },
   grenade: { name: '手雷', stack: 5, cat: '武器', hold: 'throw', desc: '左鍵丟出，3 秒後爆炸。炸人也炸房子，拆家必備' },
@@ -83,6 +87,8 @@ export const RECIPES = [
   // 子彈：照 rust 的比例，材料一樣但步槍子彈做得比較少（rust 是 4 發 / 3 發，這裡 8 / 6）
   { id: 'ammo_pistol', out: 8, time: 2, cost: { metal: 10, sulfur: 5 } },
   { id: 'ammo_rifle', out: 6, time: 3, cost: { metal: 10, sulfur: 5 } },
+  { id: 'launcher', out: 1, time: 12, cost: { metal: 250, wood: 100, rope: 2 } },
+  { id: 'rocket', out: 1, time: 5, cost: { metal: 40, sulfur: 80 } },
   { id: 'thompson', out: 1, time: 8, cost: { wood: 100, metal: 100, smg_body: 1 } },
   { id: 'ak', out: 1, time: 10, cost: { wood: 150, metal: 200, rifle_body: 1 } },
   { id: 'grenade', out: 1, time: 3, cost: { metal: 25, sulfur: 40 } },
@@ -127,6 +133,8 @@ export const DEPLOY = {
 // ---------- 武器數值 ----------
 export const GUNS = {
   ak: { dmg: 30, mult: { head: 2.0, body: 1.0, legs: 0.75 }, rpm: 450, mag: 30, reload: 3.0, recoil: 1.0, hip: 1.5, adsSpread: 0.1, falloff: [60, 200, 0.7], range: 320, pieceDmg: 2, ammo: 'ammo_rifle' },
+  // 火箭筒：不是打射線，是發射一顆火箭彈（傷害在 ROCKET）
+  launcher: { launcher: true, dmg: 0, mult: { head: 1, body: 1, legs: 1 }, rpm: 60, mag: 1, reload: 3.5, recoil: 0, hip: 1.2, adsSpread: 0.15, falloff: [999, 1000, 1], range: 300, pieceDmg: 0, ammo: 'rocket' },
   thompson: { dmg: 22, mult: { head: 1.8, body: 1.0, legs: 0.75 }, rpm: 650, mag: 25, reload: 2.6, recoil: 0.55, hip: 1.9, adsSpread: 0.3, falloff: [30, 90, 0.55], range: 200, pieceDmg: 1.5, ammo: 'ammo_pistol' },
 };
 // meat / cloth：刨屍體一下拿多少（rust：工具越利拿越多）
@@ -143,6 +151,8 @@ export function falloffMult(G, dist) {
 export const BOW = { draw: 0.7, minSpeed: 22, maxSpeed: 52, dmg: 50, headMult: 2.0, gravity: 9.8, pieceDmg: 1, crateDmg: 20 };
 export const NADE = { fuse: 3.0, speed: 16, radius: 6, playerDmg: 95, pieceDmg: 150, pieceFull: 1.5, pieceRadius: 5, crateDmg: 100 };
 // C4：黏在東西上 10 秒後爆。對建築傷害大但範圍小（1.6m 內全額 560：木牆 400、地基 500 都一顆爛）
+// 火箭彈：直線飛、有一點下墜，打到東西（或人）就爆。木牆 2 發、鐵牆 4 發
+export const ROCKET = { speed: 40, gravity: 2.5, life: 5, radius: 4.5, playerDmg: 130, pieceDmg: 320, pieceFull: 1.5, pieceRadius: 3.5, crateDmg: 200 };
 export const C4 = { fuse: 10, speed: 11, up: 1.5, radius: 4, playerDmg: 150, pieceDmg: 560, pieceFull: 1.6, pieceRadius: 3.2, crateDmg: 200 };
 
 // ---------- 世界資源 ----------

@@ -6,7 +6,7 @@
 //   - 鐵桶刷新、礦點重生、火爐冶煉都由房主決定。單人模式自己就是房主。
 import * as THREE from 'three';
 import { UPGRADE } from './items.js';
-import { ITEMS, RECIPES, recipeOf, PIECES, DEPLOY, MELEE, GUNS, NADE as NADE_DEF, C4, CRATE, NODE_RESPAWN, MATCH_SECONDS, BEAR, rollLoot, falloffMult } from './items.js';
+import { ITEMS, RECIPES, recipeOf, PIECES, DEPLOY, MELEE, GUNS, NADE as NADE_DEF, C4, ROCKET, CRATE, NODE_RESPAWN, MATCH_SECONDS, BEAR, rollLoot, falloffMult } from './items.js';
 import { createBears } from './bears.js';
 import { rng } from './textures.js';
 import * as INV from './inventory.js';
@@ -696,6 +696,15 @@ export function createSurvival(env) {
   const gunHit = (wh, gun) => hitThings(wh, { piece: GUNS[gun].pieceDmg, crate: 12, deploy: GUNS[gun].pieceDmg, bear: GUNS[gun].dmg * falloffMult(GUNS[gun], wh.dist) });
 
   // ---------- 手雷 ----------
+  // 火箭筒發射：一顆直線飛的火箭彈（type rocket，網路代號 c:2）
+  function fireRocket(origin, dir) {
+    const v = dir.clone().multiplyScalar(ROCKET.speed);
+    const id = nid('r');
+    proj.spawnNade({ id, o: origin, v, mine: true, type: 'rocket' });
+    send('nade', { id, o: v3(origin), v: v3(v), c: 2 });
+  }
+  const typeOf = (c) => (c === 1 ? 'c4' : c === 2 ? 'rocket' : 'nade');
+  const codeOf = (type) => (type === 'c4' ? 1 : type === 'rocket' ? 2 : 0);
   // 丟手上的手雷或 C4
   function throwNade(origin, dir) {
     const c4 = held()?.id === 'c4', def = c4 ? C4 : NADE_DEF;
@@ -706,7 +715,7 @@ export function createSurvival(env) {
     consumeHeld();
   }
   function explode(p, mine, type = 'nade') {
-    const D = type === 'c4' ? C4 : NADE_DEF, w = type === 'c4' ? 'c4' : 'grenade';
+    const D = type === 'c4' ? C4 : type === 'rocket' ? ROCKET : NADE_DEF, w = type === 'c4' ? 'c4' : type === 'rocket' ? 'launcher' : 'grenade';
     fx.explosion(p);
     if (type === 'c4') fx.explosion(p.clone().add(new THREE.Vector3(0, 0.5, 0)));
     const dist = p.distanceTo(host.eye());
@@ -874,8 +883,12 @@ export function createSurvival(env) {
       case 'auth': structs.authorize(m.door, m.who); break;
       case 'deploy': createDeploy(m); break;
       case 'ddmg': damageDeploy(m.id, m.dmg, true); break;
-      case 'nade': proj.spawnNade({ id: m.id, o: toV(m.o), v: toV(m.v), mine: false, type: m.c ? 'c4' : 'nade' }); break;
-      case 'boom': { proj.remove(m.id); explode(toV(m.p), false, m.c ? 'c4' : 'nade'); break; }
+      case 'nade': {
+        proj.spawnNade({ id: m.id, o: toV(m.o), v: toV(m.v), mine: false, type: typeOf(m.c) });
+        if (m.c === 2) audio.launch(toV(m.o), toV(m.o).distanceTo(host.eye()));
+        break;
+      }
+      case 'boom': { proj.remove(m.id); explode(toV(m.p), false, typeOf(m.c)); break; }
       case 'bears': case 'bdmg': case 'bdie': case 'bharv': case 'bgone': bears.onMessage(m); break;
       case 'arrow': {
         proj.spawnArrow({ id: m.id, o: toV(m.o), v: toV(m.v), mine: false });
@@ -980,7 +993,8 @@ export function createSurvival(env) {
     selectHot(i) { sv.hotIdx = i; changed(); },
     get hotIdx() { return sv.hotIdx; },
     spawnArrowNet(id, o, v) { send('arrow', { id, o: v3(o), v: v3(v) }); },
-    sendBoom(id, p, type = 'nade') { send('boom', { id, p: v3(p), c: type === 'c4' ? 1 : 0 }); },
+    sendBoom(id, p, type = 'nade') { send('boom', { id, p: v3(p), c: codeOf(type) }); },
+    fireRocket,
     nid,
     refresh: changed,
   };
