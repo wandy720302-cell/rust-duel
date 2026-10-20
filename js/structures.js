@@ -227,6 +227,13 @@ export function createStructures(world, fx) {
         seen.add(kk);
         out.push({ x: e.mx, y: e.y, z: e.mz, r: yawOf(e.nx, e.nz), k: 'w' });
       }
+      const add = (x, y, z, r) => { const kk = key(x, y, z); if (!seen.has(kk)) { seen.add(kk); out.push({ x, y, z, r, k: 'w' }); } };
+      for (const rec of pieces.values()) {
+        // 牆可以疊在牆上面（rust 也是），二樓沒有地板的地方（例如樓梯口）才圍得起來
+        if (PIECES[rec.type]?.slot === 'wall') add(rec.x, rec.y + WALL_H, rec.z, rec.r);
+        // 樓梯那一格的頂端四條邊
+        if (rec.type === 'stairs') for (const e of edgesOf(rec)) add(e.mx, e.y + WALL_H, e.mz, yawOf(e.nx, e.nz));
+      }
     } else if (def.slot === 'stairs') {
       // 樓梯蓋在方形地基 / 地板上面，跟底下那格同一個位置
       for (const rec of pieces.values()) if ((isBase(rec) || isFloor(rec)) && PIECES[rec.type].shape === 'sq') out.push({ x: rec.x, y: rec.y, z: rec.z, r: rec.r, k: 's' });
@@ -302,7 +309,7 @@ export function createStructures(world, fx) {
       if (lo < -1.2) { res.reason = '不能蓋在水裡'; return res; }
     }
     // 重疊檢查：地基檢查整個柱體，牆檢查牆身，地板 / 屋頂檢查板子那一層
-    const [y0, y1] = def.slot === 'found' ? [res.bottom + 0.6, res.y] : def.slot === 'wall' ? [res.y, res.y + WALL_H]
+    const [y0, y1] = def.slot === 'found' ? [res.bottom + 0.6, res.y] : def.slot === 'wall' ? [res.y, res.y + WALL_H - 0.25]
       : def.slot === 'stairs' ? [res.y + 0.05, res.y + WALL_H - 0.1]
       : type === 'roof' || type === 'troof' ? [res.y, res.y + 1.2] : [res.y - 0.2, res.y];
     if (footprint(type, res.x, res.z, res.r).some(([px, pz]) => hitsCollider(px, pz, y0, y1))) { res.reason = '這裡擋到東西了'; return res; }
