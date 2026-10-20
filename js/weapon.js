@@ -486,7 +486,9 @@ export function createViewmodel(T, skin = '#c99d7a') {
   const bowRig = new THREE.Group();
   holder.add(bowRig);
   const bow = buildBow();
-  bow.group.rotation.set(0, 0, -0.22);
+  // 縮小、往左下斜拿：上半截弓要從準心左邊經過，不然整個畫面都被弓擋住
+  bow.group.scale.setScalar(0.72);
+  bow.group.rotation.set(0, 0, -0.5);
   bowRig.add(bow.group);
   block(bowRig, 0.06, 0.08, 0.07, 0, 0, -0.03);
   limb(bowRig, [0, -0.02, -0.02], [-0.18, -0.3, 0.3], 0.065, 0.06);
@@ -540,7 +542,7 @@ export function createViewmodel(T, skin = '#c99d7a') {
     rock: { p: [0.17, -0.17, -0.3], r: [0.15, -0.35, 0.1] },
     hammer: { p: [0.17, -0.18, -0.3], r: [0.1, -0.3, 0.1] },
     sword: { p: [0.17, -0.19, -0.3], r: [0.1, -0.3, 0.12] },
-    bow: { p: [-0.04, -0.03, -0.42], r: [0, 0.1, 0] },
+    bow: { p: [-0.25, -0.13, -0.42], r: [0, 0.14, 0] },
     grenade: { p: [0.16, -0.15, -0.3], r: [0.1, -0.2, 0] },
     c4: { p: [0.16, -0.15, -0.3], r: [0.15, -0.25, 0] },
     plan: { p: [0.13, -0.115, -0.3], r: [0.05, -0.25, 0] },
