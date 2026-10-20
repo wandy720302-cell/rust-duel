@@ -87,7 +87,7 @@ export const RECIPES = [
   // 子彈：照 rust 的比例，材料一樣但步槍子彈做得比較少（rust 是 4 發 / 3 發，這裡 8 / 6）
   { id: 'ammo_pistol', out: 8, time: 2, cost: { metal: 10, sulfur: 5 } },
   { id: 'ammo_rifle', out: 6, time: 3, cost: { metal: 10, sulfur: 5 } },
-  { id: 'launcher', out: 1, time: 12, cost: { metal: 250, wood: 100, rope: 2 } },
+  { id: 'launcher', out: 1, time: 12, cost: { metal: 500, wood: 500, sulfur: 200 } },
   { id: 'rocket', out: 1, time: 5, cost: { metal: 40, sulfur: 80 } },
   { id: 'thompson', out: 1, time: 8, cost: { wood: 100, metal: 100, smg_body: 1 } },
   { id: 'ak', out: 1, time: 10, cost: { wood: 150, metal: 200, rifle_body: 1 } },
